@@ -1,0 +1,37 @@
+services:
+  db:
+    image: postgres:15
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    environment:
+      - POSTGRES_DB=acuchat_db
+      - POSTGRES_USER=admin
+      - POSTGRES_PASSWORD=1234
+
+  llm-service:
+    image: ollama/ollama:latest
+    container_name: acu-llm
+    volumes:
+      - ollama_data:/root/.ollama
+    ports:
+      - "11434:11434"
+
+  webapp:
+    build: ./webapp
+    command: python manage.py runserver 0.0.0.0:8000
+    volumes:
+      - ./webapp:/app
+    ports:
+      - "8000:8000"
+    environment:
+      - DB_NAME=acuchat_db
+      - DB_USER=admin
+      - DB_PASSWORD=1234
+      - DB_HOST=db
+    depends_on:
+      - db
+      - llm-service
+
+volumes:
+  postgres_data:
+  ollama_data:

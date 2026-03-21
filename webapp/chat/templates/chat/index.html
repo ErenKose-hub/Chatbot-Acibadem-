@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>ACU Chatbot</title>
+    <style>
+        body { font-family: sans-serif; background: #eef2f3; display: flex; justify-content: center; padding: 50px; }
+        .card { background: white; padding: 20px; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); width: 400px; }
+        #chat-box { height: 300px; overflow-y: auto; border: 1px solid #ddd; margin-bottom: 10px; padding: 10px; }
+        input { width: 75%; padding: 8px; }
+        button { padding: 8px; background: #007bff; color: white; border: none; cursor: pointer; }
+    </style>
+</head>
+<body>
+    <div class="card">
+        <h3>🎓 ACU Asistanı</h3>
+        <div id="chat-box"></div>
+        <input type="text" id="user-input" placeholder="Bir şey sor...">
+        <button onclick="send()">Gönder</button>
+    </div>
+
+    <script>
+        function send() {
+            const input = document.getElementById('user-input');
+            const box = document.getElementById('chat-box');
+            box.innerHTML += `<p><b>Sen:</b> ${input.value}</p>`;
+            
+            fetch('', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/x-www-form-urlencoded', 'X-CSRFToken': '{{ csrf_token }}'},
+                body: 'message=' + encodeURIComponent(input.value)
+            })
+            .then(res => res.json())
+            .then(data => {
+                box.innerHTML += `<p><b>Bot:</b> ${data.response}</p>`;
+                input.value = '';
+            });
+        }
+    </script>
+</body>
+</html>
