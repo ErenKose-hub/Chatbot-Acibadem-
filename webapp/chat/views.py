@@ -7,7 +7,7 @@ from django.http import JsonResponse
 from .models import UniversityPDF, UniversityLink
 
 
-# --- 1. YARDIMCI FONKSİYON: Hibrit Veri Toplayıcı ---
+#  YARDIMCI FONKSİYON: Hibrit Veri Toplayıcı ---
 def get_hybrid_context():
     context_text = ""
 
@@ -40,7 +40,6 @@ def get_hybrid_context():
     return context_text[:3000]
 
 
-# --- 2. ANA FONKSİYON: Chat Yönetimi ---
 def chat_home(request):
     # Konusma sirasinda kisa vadeli hafiza
     if "chat_history" not in request.session:
@@ -56,11 +55,9 @@ def chat_home(request):
         easy_words = ["selam", "merhaba", "sa", "slm", "naber", "nasılsın", "hey"]
 
         if any(word == user_text for word in easy_words) or len(user_text) < 5:
-            fresh_context = "Kullanıcı sadece selam verdi veya hal hatır sordu. Okul bilgisini kullanmana gerek yok, sıcak bir karşılama yap."
+            fresh_context = "Kullanıcı sadece selam verdi veya hal hatır sordu. Okul bilgisini kullanmana gerek yok,  bir karşılama yap."
         else:
             fresh_context = get_hybrid_context()
-
-        fresh_context = get_hybrid_context()
 
         # Geçmiş Konuşmayı Metne Dök (Son 3 mesaj yeterli)
         past_convo = ""
@@ -71,7 +68,7 @@ def chat_home(request):
         system_instructions = (
             "### SİSTEM TALİMATI ###\n"
             "Sen Acıbadem Üniversitesi'nin resmi asistanısın. Sadece TÜRKÇE cevap ver.\n"
-            "Samimi, yardımsever ve profesyonel ol. Cevaplarını aşağıdaki bilgilere dayandır.\n\n"
+            "akademik , yardımsever ve profesyonel ol. Cevaplarını aşağıdaki bilgilere dayandır.\n\n"
             f"### BİLGİ KAYNAĞI (PDF & WEB) ###\n{fresh_context}\n\n"
             "### BİLGİ BANKASI ###\n"
             "Mühendislik Fakültesi: Bilgisayar, Tıp ve Biyomedikal Mühendisliği bölümlerini içerir.\n\n"
@@ -105,7 +102,7 @@ def chat_home(request):
         except Exception as e:
             print(f"Hata: {e}")
             return JsonResponse(
-                {"response": "Bağlantı koptu bebiş, Ollama konteynerini kontrol et."}
+                {"response": "Bağlantı koptu , Ollama konteynerini kontrol et."}
             )
 
     return render(request, "chat/index.html")
