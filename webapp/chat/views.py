@@ -11,7 +11,7 @@ from .models import UniversityPDF, UniversityLink
 def get_hybrid_context():
     context_text = ""
 
-    # BÖLÜM A: Veritabanındaki PDF'leri Oku
+    # Veritabanındaki PDF'leri Okur
     pdf_docs = UniversityPDF.objects.all()
     for doc in pdf_docs:
         try:
@@ -23,15 +23,12 @@ def get_hybrid_context():
         except Exception as e:
             print(f"PDF Okuma Hatası ({doc.title}): {e}")
 
-    # BÖLÜM B: Canlı Linkleri Kazı (Scraping)
-    urls = [
-        "https://www.acibadem.edu.tr/duyurular"
-    ]  # Burayı istersen modele de bağlayabiliriz sonra
+    #  Link Scrapping
+    urls = ["https://www.acibadem.edu.tr/duyurular"]
     for url in urls:
         try:
             res = requests.get(url, timeout=5)
             soup = BeautifulSoup(res.text, "html.parser")
-            # Gereksizleri temizle
             for s in soup(["script", "style", "nav", "footer"]):
                 s.decompose()
 
@@ -40,20 +37,29 @@ def get_hybrid_context():
         except Exception as e:
             print(f"Link Kazıma Hatası ({url}): {e}")
 
-    return context_text[:3000]  # Llama'nın kafası karışmasın diye sınır
+    return context_text[:3000]
 
 
 # --- 2. ANA FONKSİYON: Chat Yönetimi ---
 def chat_home(request):
-    # Session (Hafıza) Başlatma
+    # Konusma sirasinda kisa vadeli hafiza
     if "chat_history" not in request.session:
         request.session["chat_history"] = []
 
     if request.method == "POST":
         user_text = request.POST.get("message")
         history = request.session["chat_history"]
+    if request.method == "POST":
+        user_text = request.POST.get("message").lower().strip()
 
-        # Güncel PDF ve Web bilgisini al
+        # --- AKILLI FİLTRE: Basit şeyler için kütüphaneye gitme! ---
+        easy_words = ["selam", "merhaba", "sa", "slm", "naber", "nasılsın", "hey"]
+
+        if any(word == user_text for word in easy_words) or len(user_text) < 5:
+            fresh_context = "Kullanıcı sadece selam verdi veya hal hatır sordu. Okul bilgisini kullanmana gerek yok, sıcak bir karşılama yap."
+        else:
+            fresh_context = get_hybrid_context()
+
         fresh_context = get_hybrid_context()
 
         # Geçmiş Konuşmayı Metne Dök (Son 3 mesaj yeterli)
@@ -61,7 +67,7 @@ def chat_home(request):
         for chat in history[-3:]:
             past_convo += f"Kullanıcı: {chat['user']}\nAsistan: {chat['bot']}\n"
 
-        # Llama'ya gidecek nihai Prompt
+        # Llama Promptlar
         system_instructions = (
             "### SİSTEM TALİMATI ###\n"
             "Sen Acıbadem Üniversitesi'nin resmi asistanısın. Sadece TÜRKÇE cevap ver.\n"
@@ -81,8 +87,8 @@ def chat_home(request):
                     "prompt": full_prompt,
                     "stream": False,
                     "options": {
-                        "temperature": 0.3,  # Daha tutarlı cevaplar için düşük sıcaklık
-                        "num_predict": 350,  # Cevabın uzunluğu
+                        "temperature": 0.3,
+                        "num_predict": 350,
                     },
                 },
                 timeout=90,
@@ -90,7 +96,6 @@ def chat_home(request):
             data = response.json()
             bot_response = data.get("response", "Cevap üretilemedi.").strip()
 
-            # Hafızayı Güncelle
             history.append({"user": user_text, "bot": bot_response})
             request.session["chat_history"] = history
             request.session.modified = True
@@ -103,5 +108,4 @@ def chat_home(request):
                 {"response": "Bağlantı koptu bebiş, Ollama konteynerini kontrol et."}
             )
 
-    # GET isteği gelirse sayfayı yükle
     return render(request, "chat/index.html")
