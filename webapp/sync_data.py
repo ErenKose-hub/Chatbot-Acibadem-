@@ -2,6 +2,8 @@ import os
 import django
 import requests
 import time
+import csv
+import io
 from bs4 import BeautifulSoup
 from urllib.parse import urljoin, urlparse
 
@@ -46,6 +48,25 @@ def clean_soup(soup):
 
     return soup
 
+def fetch_and_parse_csv(csv_url):
+    """CSV dosyasını indirir ve okunabilir bir metne (tablo formatına) çevirir."""
+    try:
+        res = requests.get(csv_url, timeout=10)
+        res.encoding = "utf-8"
+        csv_data = res.text
+        
+        # CSV'yi satır satır okuyup aralarına | koyarak metne çeviriyoruz
+        reader = csv.reader(io.StringIO(csv_data))
+        table_text = "\n[TABLO VERİSİ BAŞLANGICI]\n"
+        for row in reader:
+            if any(row):  # Boş satırları atla
+                table_text += " | ".join([cell.strip() for cell in row if cell.strip()]) + "\n"
+        table_text += "[TABLO VERİSİ BİTİŞİ]\n"
+        return table_text
+    except Exception as e:
+        print(f"      [CSV Hatası] {csv_url}: {e}")
+        return ""
+
 
 def extract_main_content(soup):
     """
@@ -83,6 +104,14 @@ def get_content_and_links(url):
 
         # Asıl içerik bloğunu çıkar
         clean_text = extract_main_content(soup)
+        
+        # Eğer sayfada CSV linki varsa (dinamik yüklenen tablolar), indirip metne ekle
+        for a in soup.find_all("a", href=True):
+            if a["href"].endswith(".csv"):
+                csv_url = urljoin(url, a["href"])
+                csv_content = fetch_and_parse_csv(csv_url)
+                if csv_content and clean_text:
+                    clean_text += "\n" + csv_content
 
         # Linkleri topla (link çekme temiz soup üzerinden yapılır)
         links = []
