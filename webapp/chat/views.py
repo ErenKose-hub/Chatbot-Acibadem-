@@ -20,7 +20,28 @@ def normalize_text(text):
     return text
 
 
-def build_context(user_text, max_results=3, max_chars=700):
+def extract_relevant_chunks(text, search_words):
+    """Tablo verilerini (KV formatı) filtreler, sadece sorguyla eşleşen blokları döndürür."""
+    if "--- KAYIT ---" not in text:
+        return text  # Tablo yoksa düz metni döndür
+        
+    chunks = text.split("--- KAYIT ---")
+    relevant_chunks = [chunks[0][:500]]  # Sayfa girişinin sadece başını al (Gürültüyü azalt)
+    search_keywords = [w.lower() for w in search_words]
+    
+    for chunk in chunks[1:]:
+        chunk_lower = chunk.lower()
+        if any(kw in chunk_lower for kw in search_keywords):
+            relevant_chunks.append(chunk.strip())
+            
+    # Eğer hiç spesifik eşleşme olmadıysa ilk birkaç satırı örnek olarak koy
+    if len(relevant_chunks) == 1:
+        relevant_chunks.extend([c.strip() for c in chunks[1:4]])
+        
+    return "\n--- KAYIT ---\n".join(relevant_chunks)
+
+
+def build_context(user_text, max_results=3, max_chars=3000):
     """Kullanıcı sorusuna göre veritabanından alakalı context oluşturur."""
     words = [w for w in user_text.split() if len(w) > 3]
 
@@ -41,6 +62,9 @@ def build_context(user_text, max_results=3, max_chars=700):
         parts = []
         for item in related_data:
             clean = item.raw_text.strip()
+            # Eğer sayfa bir tabloysa, sadece alakalı satırları süz
+            clean = extract_relevant_chunks(clean, words)
+            
             if len(clean) > 100:  # Çok kısa (menü/başlık) metinleri atla
                 parts.append(clean[:max_chars])
         return "\n--- SAYFA AYRACI ---\n".join(parts) if parts else None
@@ -50,7 +74,10 @@ def build_context(user_text, max_results=3, max_chars=700):
 
 def chat_home(request):
     """Ana sohbet arayüzünü yöneten view."""
-    if "chat_history" not in request.session:
+    if request.method == "GET":
+        # F5 atıldığında geçmişi sıfırla ki bot eski hatalı cevaplarını taklit etmesin
+        request.session["chat_history"] = []
+    elif "chat_history" not in request.session:
         request.session["chat_history"] = []
 
     if request.method == "POST":
@@ -85,35 +112,41 @@ def chat_home(request):
             past_convo += f"Kullanıcı: {chat['user']}\nAsistan: {chat['bot']}\n"
 
         system_instructions = (
-            "SEN BİR ÜNİVERSİTE ASİSTANISIN. SADECE VE SADECE SANA VERİLEN METNE GÖRE CEVAP VER.\n\n"
-            f"METİN:\n{fresh_context[:1000]}\n\n"
-            "DİKKAT:\n"
-            "1. Kullanıcı metinde OLMAYAN bir şey sorarsa (örn: bölüm başkanı, kimdir, telefon numarası) KESİNLİKLE uydurma. Sadece 'Bu bilgi sistemimde kayıtlı değil' de.\n"
-            "2. Cevabına 'Kurallar 1, 2' gibi teknik yazılar ekleme.\n"
-            "3. Doğal, kısa ve yardımcı bir dille konuş."
+            "Sen Acıbadem Üniversitesi için çalışan resmi, profesyonel ve net bir asistansın.\n"
+            "Aşağıdaki [KAYNAK METİN] veritabanından çekilmiş resmi bilgilerdir. Sadece bu bilgilere dayanarak cevap ver.\n\n"
+            f"[KAYNAK METİN BAŞLANGICI]\n{fresh_context[:6000]}\n[KAYNAK METİN BİTİŞİ]\n\n"
+            "Görevlerin:\n"
+            "- Kullanıcının sorusunun cevabını tablodan (KAYIT) bul ve doğrudan söyle.\n"
+            "- Tabloda aradığın bölümün BİRDEN FAZLA türü varsa (örn: %50 İndirimli VE Burslu), EKSİKSİZ olarak tüm türlerin kontenjanlarını alt alta yaz.\n"
+            "- 'Kontenjan' tablodaki kapasiteyi ifade eder. 'Yerleşen öğrenci' kelimesini veya kendi varsayımlarını KESİNLİKLE kullanma.\n"
+            "- KESİNLİKLE ve SADECE Türkçe dilinde cevap ver. İngilizce cevap verme.\n"
+            "- Cevabına 'Tabloya göre', 'According to the table', 'Size sunulan verilere göre' gibi gereksiz giriş cümleleri EKLEME. Doğrudan net rakamları ver."
         )
 
-        full_prompt = (
-            f"{system_instructions}\n\nGEÇMİŞ SOHBET:\n{past_convo}\nSoru: {user_text}\nCevap:"
-        )
+        messages = []
+        if past_convo:
+            messages.append({"role": "user", "content": f"Önceki konuşmamız özeti:\n{past_convo}"})
+            messages.append({"role": "assistant", "content": "Anladım, önceki konuşmalarımızı hatırlayarak net cevaplar vereceğim."})
+        messages.append({"role": "user", "content": user_text})
 
-        # --- 4. OLLAMA İSTEĞİ ---
+        # --- 4. OLLAMA İSTEĞİ (CHAT API) ---
         try:
             res = requests.post(
-                f"{OLLAMA_BASE_URL}/api/generate",
+                f"{OLLAMA_BASE_URL}/api/chat",
                 json={
-                    "model": "gemma:2b",
-                    "prompt": full_prompt,
+                    "model": "llama3:latest",
+                    "messages": [{"role": "system", "content": system_instructions}] + messages,
                     "stream": False,
                     "options": {
                         "temperature": 0.1,
-                        "num_ctx": 4096,
-                        "num_predict": 200,
+                        "num_ctx": 8192,
+                        "num_predict": 300,
                     },
                 },
-                timeout=60,
+                timeout=180,  # Llama 3 8B'nin yavaş çalışması durumunda kopmayı engellemek için süre artırıldı
             )
-            bot_response = res.json().get("response", "Üzgünüm, şu an yanıt veremiyorum.").strip()
+            res_json = res.json()
+            bot_response = res_json.get("message", {}).get("content", "Üzgünüm, şu an yanıt veremiyorum.").strip()
 
             history.append({"user": user_text, "bot": bot_response})
             request.session["chat_history"] = history
@@ -158,7 +191,7 @@ def chat_api(request):
         response = requests.post(
             f"{OLLAMA_BASE_URL}/api/generate",
             json={
-                "model": "gemma:2b",
+                "model": "llama3:latest",
                 "prompt": full_prompt,
                 "stream": False,
                 "options": {"temperature": 0.1, "num_predict": 200},

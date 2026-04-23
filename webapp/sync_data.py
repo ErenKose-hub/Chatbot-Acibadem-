@@ -49,19 +49,36 @@ def clean_soup(soup):
     return soup
 
 def fetch_and_parse_csv(csv_url):
-    """CSV dosyasını indirir ve okunabilir bir metne (tablo formatına) çevirir."""
+    """CSV dosyasını indirir, ayıracını otomatik tespit eder ve okunabilir KV (Key-Value) metne çevirir."""
     try:
         res = requests.get(csv_url, timeout=10)
         res.encoding = "utf-8"
         csv_data = res.text
         
-        # CSV'yi satır satır okuyup aralarına | koyarak metne çeviriyoruz
-        reader = csv.reader(io.StringIO(csv_data))
-        table_text = "\n[TABLO VERİSİ BAŞLANGICI]\n"
-        for row in reader:
-            if any(row):  # Boş satırları atla
-                table_text += " | ".join([cell.strip() for cell in row if cell.strip()]) + "\n"
-        table_text += "[TABLO VERİSİ BİTİŞİ]\n"
+        # Dialect ve delimiter'ı bul (noktalı virgül mü virgül mü)
+        dialect = csv.Sniffer().sniff(csv_data[:1024])
+        reader = csv.reader(io.StringIO(csv_data), dialect)
+        
+        table_text = "\n[CSV VERİSİ BAŞLANGICI]\n"
+        headers = []
+        
+        for i, row in enumerate(reader):
+            if not any(row):  # Boş satırları atla
+                continue
+                
+            # İlk dolu satırı başlık (header) kabul et
+            if not headers:
+                headers = [h.strip() for h in row]
+                continue
+                
+            # Alt satırları KV formatına çevir
+            table_text += "--- KAYIT ---\n"
+            for j, cell in enumerate(row):
+                if cell.strip():
+                    header_name = headers[j] if j < len(headers) and headers[j] else f"Sütun {j+1}"
+                    table_text += f"{header_name}: {cell.strip()}\n"
+                    
+        table_text += "[CSV VERİSİ BİTİŞİ]\n"
         return table_text
     except Exception as e:
         print(f"      [CSV Hatası] {csv_url}: {e}")
