@@ -12,23 +12,43 @@ os.environ.setdefault("DJANGO_SETTINGS_MODULE", "config.settings")
 django.setup()
 
 from chat.models import UniversityLink, UniversityContent
+from chat.vector_store import upsert_content
 
-# Gürültü olarak değerlendirilen tag'ler
-NOISE_TAGS = ["script", "style", "nav", "footer", "header", "aside", "form", "noscript", "iframe"]
+# Gürültü olarak değlendirilen tag'ler
+NOISE_TAGS = ["script", "style", "nav", "footer", "header", "aside", "form", "noscript", "iframe", "button"]
 
 # Gürültü class/id kalıpları (kısmi eşleşme)
-NOISE_PATTERNS = ["sidebar-menu", "mobil-breadcrumb", "breadcrumb-wrapper", "footer-content"]
+NOISE_PATTERNS = [
+    "sidebar-menu", "mobil-breadcrumb", "breadcrumb-wrapper", "footer-content",
+    "sticky", "cookie", "popup", "modal", "overlay", "social", "share",
+    "search-bar", "language-switch", "quick-links", "hizli-erisim",
+]
+
+# Buton / CTA metin kalıpları — bu metinleri içeren tag'leri sil
+BUTTON_TEXT_PATTERNS = [
+    r"Sor Cevaplayalım", r"Başvuru Yap", r"Giriş", r"\bGiriş\b", r"Üye Ol",
+    r"Kaydol", r"Detay", r"Daha Fazla", r"Tümü Gör", r"Yükle",
+    r"Ara\.\.\.", r"Arama", r"Menu", r"Menü",
+]
 
 # Alt sayfa URL'lerinde aranacak anahtar kelimeler
 LINK_KEYWORDS = ["kontenjan", "puan", "akademik", "kadro", "ogretim", "bolum", "ders", "ucret", "program", "fakulte"]
+
+# Her senkronizasyonda mutlaka çekilecek kritik URL'ler (DB'de link kaydı olmasa bile)
+EXTRA_URLS = [
+    "https://www.acibadem.edu.tr/aday/ogrenci/egitim/lisans/lisans-kontenjan-ve-puan-tablosu",
+    "https://www.acibadem.edu.tr/akademik/lisans",
+]
 
 # Minimum anlamlı metin uzunluğu
 MIN_TEXT_LENGTH = 300
 
 
 def clean_soup(soup):
-    """Sayfadan gürültü tag ve class'larını temizler."""
-    # Tag bazlı temizlik
+    """Sayfadan gürültü tag ve class'ı ile buton/navigasyon metinlerini temizler."""
+    import re as _re
+
+    # Tag bazlı temizlik (button tag da dahil edildi)
     for tag in soup(NOISE_TAGS):
         tag.decompose()
 
@@ -37,6 +57,14 @@ def clean_soup(soup):
         for el in soup.find_all(True, class_=lambda c: c and any(pattern in cls.lower() for cls in (c if isinstance(c, list) else [c]))):
             el.decompose()
         for el in soup.find_all(True, id=lambda i: i and pattern in i.lower()):
+            el.decompose()
+
+    # Buton / CTA metni taşıyan öğeleri sil (a, span, div, li vb.)
+    button_regex = _re.compile(
+        "|".join(BUTTON_TEXT_PATTERNS), flags=_re.IGNORECASE
+    )
+    for el in soup.find_all(["a", "span", "li", "div", "p"]):
+        if el.get_text(strip=True) and button_regex.fullmatch(el.get_text(strip=True)):
             el.decompose()
 
     # Tabloları LLM için okunabilir ( | formatında) metne çevir
@@ -109,6 +137,44 @@ def extract_main_content(soup):
     return None
 
 
+def sync_manual_data():
+    """manual_data/ klasörü altındaki .txt dosyalarını okur ve hem DB'ye hem ChromaDB'ye kaydeder."""
+    manual_dir = "/app/manual_data"
+    if not os.path.exists(manual_dir):
+        print(f"\n[MANUEL VERİ] Klasör bulunamadı: {manual_dir}")
+        return 0
+
+    files = [f for f in os.listdir(manual_dir) if f.endswith(".txt")]
+    if not files:
+        print(f"\n[MANUEL VERİ] İşlenecek .txt dosyası bulunamadı.")
+        return 0
+
+    print(f"\n[MANUEL VERİ] {len(files)} dosya işleniyor...")
+    count = 0
+    for filename in files:
+        filepath = os.path.join(manual_dir, filename)
+        try:
+            with open(filepath, 'r', encoding='utf-8') as f:
+                content = f.read().strip()
+            
+            if len(content) < 10:
+                print(f"  ✗ {filename} (Çok kısa içerik, atlandı)")
+                continue
+
+            source_name = f"Manuel: {filename}"
+            UniversityContent.objects.update_or_create(
+                source_name=source_name,
+                defaults={"raw_text": content}
+            )
+            upsert_content(source_name, content)
+            count += 1
+            print(f"  ✓ {filename} ({len(content)} karakter)")
+        except Exception as e:
+            print(f"  ✗ {filename} (Hata: {e})")
+    
+    return count
+
+
 def get_content_and_links(url):
     """Sayfa içeriğini çeker, temizler ve içindeki alakalı linkleri bulur."""
     try:
@@ -152,15 +218,18 @@ def sync_deep():
     base_links = UniversityLink.objects.all()
     total_saved = 0
 
+    # --- 1. DB'deki ana bağlantıları işle ---
     for base in base_links:
         print(f"\n[ANA SAYFA] {base.title} → {base.url}")
         main_text, sub_links = get_content_and_links(base.url)
 
         if main_text:
+            source = f"Ana: {base.title}"
             UniversityContent.objects.update_or_create(
-                source_name=f"Ana: {base.title}",
+                source_name=source,
                 defaults={"raw_text": main_text}
             )
+            upsert_content(source, main_text)   # ChromaDB'ye vektörleştir
             total_saved += 1
             print(f"  ✓ Kaydedildi ({len(main_text)} karakter)")
         else:
@@ -173,17 +242,42 @@ def sync_deep():
             sub_text, _ = get_content_and_links(sub)
 
             if sub_text and len(sub_text) >= MIN_TEXT_LENGTH:
+                source = f"Alt: {sub}"
                 UniversityContent.objects.update_or_create(
-                    source_name=f"Alt: {sub}",
+                    source_name=source,
                     defaults={"raw_text": sub_text}
                 )
+                upsert_content(source, sub_text)   # ChromaDB'ye vektörleştir
                 total_saved += 1
                 print(f"    ✓ Kaydedildi ({len(sub_text)} karakter)")
             else:
                 print(f"    ✗ Yetersiz içerik ({len(sub_text) if sub_text else 0} karakter), atlandı.")
 
+    # --- 2. Kritik URL'leri mutlaka çek (Tıp Fakültesi, Kontenjan Tablosu vb.) ---
+    print(f"\n[EXTRA URL'LER] {len(EXTRA_URLS)} kritik sayfa zorunlu çekiliyor...")
+    for url in EXTRA_URLS:
+        print(f"  → {url}")
+        time.sleep(1.5)
+        extra_text, _ = get_content_and_links(url)
+        if extra_text and len(extra_text) >= MIN_TEXT_LENGTH:
+            source = f"Extra: {url}"
+            UniversityContent.objects.update_or_create(
+                source_name=source,
+                defaults={"raw_text": extra_text}
+            )
+            upsert_content(source, extra_text)
+            total_saved += 1
+            print(f"    ✓ Kaydedildi ({len(extra_text)} karakter)")
+        else:
+            print(f"    ✗ Yetersiz içerik, atlandı.")
+
+    # --- 3. Manuel Verileri İşle ---
+    manual_count = sync_manual_data()
+    total_saved += manual_count
+
     print(f"\n{'=' * 60}")
     print(f"  Tamamlandı. Toplam {total_saved} kayıt güncellendi/eklendi.")
+    print(f"  (Web: {total_saved - manual_count}, Manuel: {manual_count})")
     print(f"{'=' * 60}")
 
 

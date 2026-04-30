@@ -1,0 +1,8 @@
+Acıbadem Üniversitesi Tıp Fakültesi Kontenjan Bilgileri (2024 - Manuel Test)
+
+Bölüm: Tıp Fakültesi (Türkçe)
+Burslu Kontenjan: 45
+%50 İndirimli Kontenjan: 20
+Ücretli Kontenjan: 10
+
+Not: Bu veri manuel test dosyasıdır.

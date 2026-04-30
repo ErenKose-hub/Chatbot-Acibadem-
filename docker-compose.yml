@@ -21,6 +21,8 @@ services:
     command: python manage.py runserver 0.0.0.0:8000
     volumes:
       - ./webapp:/app
+      - hf_cache:/root/.cache/huggingface
+      - ./manual_data:/app/manual_data
     ports:
       - "8000:8000"
     environment:
@@ -28,6 +30,7 @@ services:
       - DB_USER=admin
       - DB_PASSWORD=1234
       - DB_HOST=db
+      - CHROMA_PERSIST_DIR=/app/db/chroma
     depends_on:
       - db
       - llm-service
@@ -35,3 +38,4 @@ services:
 volumes:
   postgres_data:
   ollama_data:
+  hf_cache:
