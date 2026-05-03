@@ -1,0 +1,8 @@
+django>=4.2,<5.1
+psycopg2-binary
+requests
+beautifulsoup4
+djangorestframework
+PyPDF2
+chromadb
+sentence-transformers
