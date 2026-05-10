@@ -60,3 +60,4 @@ rm -rf webapp/db/chroma/*
 - **Vektör Deposu:** ChromaDB
 - **Embedding:** sentence-transformers (MiniLM-L12)
 - **Scraper:** BeautifulSoup4 & Requests
+.
