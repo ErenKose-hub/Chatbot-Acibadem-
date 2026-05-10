@@ -121,33 +121,21 @@ def build_context(user_text: str, n_results: int = 5) -> tuple[str, list[str]]:
     normalized_query = normalize_text(user_text)
     # Sistemdeki bilinen tüm ana bölümler (N-Gram mantığı için genişletilebilir)
     all_departments = [
-        "tip", "muhendislik", "eczacilik", "fizyoterapi", "beslenme", "hemsirelik", 
-        "psikoloji", "isletme", "iktisat", "hukuk", "gastronomi", "mimarlik"
-    ]
+    "tip", "muhendislik", "eczacilik", "fizyoterapi", "beslenme", "hemsirelik", 
+    "psikoloji", "isletme", "iktisat", "hukuk", "gastronomi", "mimarlik",
+    "bilgisayar", "yazilim", "biyomedikal", "endustri", "molekuler",
+    "bolum", "baskan", "erasmus", "akademik", "ogretim",
+]
     
     # Kullanıcının hangi bölümü sorduğunu tespit et
     active_depts = [dept for dept in all_departments if dept in normalized_query]
 
-    strict_filtered = []
-    for item in results:
-        doc_text_norm = normalize_text(item["text"])
-        source_norm = normalize_text(item["source"])
+    
 
-        # 1. Cross-Check: Eğer kullanıcı spesifik bölümler sorduysa, 
-        # dökümanda bu bölümlerden en az biri geçmeli.
-        if active_depts:
-            if not any(dept in doc_text_norm for dept in active_depts):
-                continue
-            
-            # 2. Negatif Filtre (Tıp sorulunca Duyuru/Beslenme engelleme kuralı devam ediyor)
-            if "tip" in active_depts:
-                if any(bad in source_norm for bad in ["beslenme", "diyetetik", "duyurular"]):
-                    continue
+    strict_filtered = results
 
-        strict_filtered.append(item)
 
-    if not strict_filtered:
-        return "", []
+
 
     # Keyword re-ranking
     results = rerank_docs(strict_filtered, user_text)
@@ -223,6 +211,19 @@ def chat_home(request):
 
         system_instructions = (
             "Sen Acıbadem Üniversitesi'nin resmi akademik asistanısın. "
+    "SADECE aşağıdaki [KAYNAK METİN] içindeki bilgileri kullan.\n\n"
+    "KESİN KURALLAR:\n"
+    "1. Kaynak metinde YAZILI OLMAYAN hiçbir bilgiyi ASLA söyleme.\n"
+    "2. Kendi bilginden yorum yapma, uydurma, tahmin etme.\n"
+    "3. Türkiye'nin başkenti, genel coğrafya gibi dış bilgileri KULLANMA.\n"
+    "4. Bilgi yoksa şunu söyle: 'Bu konu hakkında sistemimde bilgi bulunmamaktadır.'\n"
+    "5. Sadece Türkçe konuş.\n"
+    "6. '[KAYNAK METİN]' gibi teknik terimlerden bahsetme.\n\n"
+    "8. Cevapların kısa ve öz olsun, maksimum 5-6 cümle.\n"
+    "9. Asla kelime uydurma, sadece kaynak metindeki bilgiyi kullan.\n"
+    "10. Türkçe dilbilgisi kurallarına uy.\n"
+    f"[KAYNAK METİN BAŞLANGICI]\n{fresh_context[:6000]}\n[KAYNAK METİN BİTİŞİ]"
+            "Sen Acıbadem Üniversitesi'nin resmi akademik asistanısın. "
             "Görevin, [KAYNAK METİN] içindeki bilgileri kullanarak soruları yanıtlamaktır.\n\n"
 
             "KESİN KURALLAR:\n"
@@ -249,7 +250,7 @@ def chat_home(request):
             res = requests.post(
                 f"{OLLAMA_BASE_URL}/api/chat",
                 json={
-                    "model": "gemma:2b",
+                    "model": "llama3.2:3b",
                     "messages": [{"role": "system", "content": system_instructions}] + messages,
                     "stream": False,
                     "options": {
@@ -338,7 +339,7 @@ def chat_api(request):
         response = requests.post(
             f"{OLLAMA_BASE_URL}/api/generate",
             json={
-                "model": "gemma:2b",
+                "model": "llama3.2:3b",
                 "prompt": full_prompt,
                 "stream": False,
                 "options": {"temperature": 0.1, "num_predict": 300},

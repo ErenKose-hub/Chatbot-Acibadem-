@@ -218,6 +218,15 @@ def sync_deep():
     base_links = UniversityLink.objects.all()
     total_saved = 0
 
+
+
+    # --- 4. Admin İçeriklerini İşle ---
+    admin_count = sync_admin_contents()
+    total_saved += admin_count
+
+   
+   
+   
     # --- 1. DB'deki ana bağlantıları işle ---
     for base in base_links:
         print(f"\n[ANA SAYFA] {base.title} → {base.url}")
@@ -280,6 +289,24 @@ def sync_deep():
     print(f"  (Web: {total_saved - manual_count}, Manuel: {manual_count})")
     print(f"{'=' * 60}")
 
+
+
+
+def sync_admin_contents():
+    """Admin panelinden eklenen UniversityContent kayıtlarını ChromaDB'ye işler."""
+    from chat.models import UniversityContent
+    
+    contents = UniversityContent.objects.all()
+    print(f"\n[ADMİN İÇERİKLER] {contents.count()} kayıt işleniyor...")
+    count = 0
+    for content in contents:
+        try:
+            upsert_content(content.source_name, content.raw_text)
+            count += 1
+            print(f"  ✓ {content.source_name}")
+        except Exception as e:
+            print(f"  ✗ {content.source_name} (Hata: {e})")
+    return count
 
 if __name__ == "__main__":
     sync_deep()
