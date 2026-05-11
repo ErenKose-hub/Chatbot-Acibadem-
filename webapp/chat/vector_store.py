@@ -9,6 +9,7 @@ Bu modül şunları sağlar:
 """
 
 import os
+import hashlib
 from sentence_transformers import SentenceTransformer
 import chromadb
 
@@ -50,12 +51,24 @@ def get_embedding(text: str) -> list[float]:
     return _get_model().encode(text, show_progress_bar=False).tolist()
 
 
-def upsert_content(source_name: str, text: str) -> None:
+def _source_hash(source_name: str) -> str:
+    """Kaynak adından ChromaDB için stabil ve güvenli kısa ID parçası üretir."""
+    return hashlib.sha256(source_name.encode("utf-8")).hexdigest()[:16]
+
+
+def delete_source_content(source_name: str) -> None:
+    """Bir kaynağa ait eski ChromaDB chunk'larını temizler."""
+    collection = get_chroma_collection()
+    collection.delete(where={"source": source_name})
+
+
+def upsert_content(source_name: str, text: str) -> int:
     """
     Bir UniversityContent kaydını parçalara (chunks) ayırarak ChromaDB'ye yazar.
     Bu, Tıp ve Hemşirelik gibi farklı bölümlerin aynı paket içinde LLM'e gitmesini engeller.
     """
     collection = get_chroma_collection()
+    delete_source_content(source_name)
 
     # --- CHUNKING STRATEJİSİ ---
     if "--- KAYIT ---" in text:
@@ -73,9 +86,7 @@ def upsert_content(source_name: str, text: str) -> None:
             start += (chunk_size - overlap)
 
     for idx, chunk in enumerate(chunks):
-        # Her parça için benzersiz ID üret
-        clean_name = source_name[:100].replace("/", "_").replace(" ", "_")
-        doc_id = f"{clean_name}_{idx}"
+        doc_id = f"{_source_hash(source_name)}_{idx}"
         
         # Embedding ve Kayıt
         embedding = get_embedding(chunk[:2000])
@@ -87,6 +98,7 @@ def upsert_content(source_name: str, text: str) -> None:
         )
 
     print(f"  [VectorStore] {source_name[:50]}… → {len(chunks)} parçaya bölündü.")
+    return len(chunks)
 
 
 def semantic_search(query: str, n_results: int = 2) -> list[dict]:
@@ -116,12 +128,12 @@ def semantic_search(query: str, n_results: int = 2) -> list[dict]:
     metadatas = results.get("metadatas", [[]])[0]
     distances = results.get("distances", [[]])[0]
 
-    # Tüm sonuçları filtrelemeden dön (Test amaçlı kapatıldı)
+    # Çok uzak (alakasız) sonuçları filtrele: cosine distance > 1.2 → atla
     filtered = []
     for doc, meta, dist in zip(docs, metadatas, distances):
-        print(f"[VectorStore] Distance: {dist:.4f} | Source: {meta.get('source')}")
-        filtered.append({
-            "text": doc,
-            "source": meta.get("source", "Bilinmeyen Kaynak")
-        })
+        if dist <= 1.2:
+            filtered.append({
+                "text": doc,
+                "source": meta.get("source", "Bilinmeyen Kaynak")
+            })
     return filtered

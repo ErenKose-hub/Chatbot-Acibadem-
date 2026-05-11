@@ -17,11 +17,23 @@ Including another URLconf
 
 from django.contrib import admin
 from django.urls import path
-from chat.views import chat_home, chat_api, health_check
+from django.http import HttpResponse
+from chat.views import chat_home, chat_api, health_check, mascot_image
+
+
+def favicon_view(request):
+    svg = (
+        '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">'
+        '<text y=".9em" font-size="90">🎓</text></svg>'
+    )
+    return HttpResponse(svg, content_type="image/svg+xml")
+
 
 urlpatterns = [
     path("admin/", admin.site.urls),
     path("", chat_home, name="chat_home"),
-    path("api/chat/", chat_api, name="chat_api"),
     path("health/", health_check, name="health_check"),
+    path("api/chat/", chat_api, name="chat_api"),
+    path("mascot/<str:filename>", mascot_image, name="mascot_image"),
+    path("favicon.ico", favicon_view),
 ]

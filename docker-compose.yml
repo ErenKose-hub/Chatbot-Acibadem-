@@ -4,35 +4,58 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
     environment:
-      - POSTGRES_DB=acuchat_db
-      - POSTGRES_USER=admin
-      - POSTGRES_PASSWORD=1234
+      - POSTGRES_DB=${DB_NAME:-acuchat_db}
+      - POSTGRES_USER=${DB_USER:-admin}
+      - POSTGRES_PASSWORD=${DB_PASSWORD:-1234}
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-admin} -d ${DB_NAME:-acuchat_db}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
 
   llm-service:
     image: ollama/ollama:latest
     container_name: acu-llm
     volumes:
       - ollama_data:/root/.ollama
+      - ./webapp/ollama-entrypoint.sh:/ollama-entrypoint.sh:ro
     ports:
-      - "11435:11434"
+      - "${OLLAMA_PORT:-11434}:11434"
+    entrypoint: ["/bin/sh", "/ollama-entrypoint.sh"]
+    healthcheck:
+      test: ["CMD-SHELL", "ollama list | grep -q qwen2.5:3b"]
+      interval: 15s
+      timeout: 10s
+      retries: 20
 
   webapp:
     build: ./webapp
+    command: ["/bin/sh", "/app/entrypoint.sh"]
     volumes:
       - ./webapp:/app
       - hf_cache:/root/.cache/huggingface
-      - ./manual_data:/app/manual_data
-      - chroma_data:/app/db/chroma
     ports:
-      - "8000:8000"
-    env_file:
-      - ./webapp/.env
+      - "${WEBAPP_PORT:-8000}:8000"
+    environment:
+      - DJANGO_DEBUG=${DJANGO_DEBUG:-True}
+      - DJANGO_SECRET_KEY=${DJANGO_SECRET_KEY:-django-insecure-local-docker-dev-only-change-me}
+      - DJANGO_ALLOWED_HOSTS=${DJANGO_ALLOWED_HOSTS:-localhost,127.0.0.1,0.0.0.0}
+      - DJANGO_LOG_LEVEL=${DJANGO_LOG_LEVEL:-INFO}
+      - DB_NAME=${DB_NAME:-acuchat_db}
+      - DB_USER=${DB_USER:-admin}
+      - DB_PASSWORD=${DB_PASSWORD:-1234}
+      - DB_HOST=${DB_HOST:-db}
+      - DB_PORT=${DB_PORT:-5432}
+      - CHROMA_PERSIST_DIR=${CHROMA_PERSIST_DIR:-/app/db/chroma}
+      - OLLAMA_BASE_URL=${OLLAMA_BASE_URL:-http://llm-service:11434}
+      - OLLAMA_MODEL=${OLLAMA_MODEL:-qwen2.5:3b}
     depends_on:
-      - db
-      - llm-service
+      db:
+        condition: service_healthy
+      llm-service:
+        condition: service_healthy
 
 volumes:
   postgres_data:
   ollama_data:
   hf_cache:
-  chroma_data:
