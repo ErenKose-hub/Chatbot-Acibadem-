@@ -1,3 +1,4 @@
+--extra-index-url https://download.pytorch.org/whl/cpu
 django>=4.2,<5.1
 psycopg2-binary
 requests
@@ -6,3 +7,5 @@ djangorestframework
 PyPDF2
 chromadb
 sentence-transformers
+torch
+python-dotenv

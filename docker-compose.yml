@@ -18,7 +18,6 @@ services:
 
   webapp:
     build: ./webapp
-    command: python manage.py runserver 0.0.0.0:8000
     volumes:
       - ./webapp:/app
       - hf_cache:/root/.cache/huggingface
@@ -26,12 +25,8 @@ services:
       - chroma_data:/app/db/chroma
     ports:
       - "8000:8000"
-    environment:
-      - DB_NAME=acuchat_db
-      - DB_USER=admin
-      - DB_PASSWORD=1234
-      - DB_HOST=db
-      - CHROMA_PERSIST_DIR=/app/db/chroma
+    env_file:
+      - ./webapp/.env
     depends_on:
       - db
       - llm-service

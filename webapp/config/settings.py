@@ -11,9 +11,15 @@ https://docs.djangoproject.com/en/5.0/ref/settings/
 """
 
 from pathlib import Path
+import os
+from dotenv import load_dotenv
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
+
+# .env dosyasını yükle (Docker env_file direktifi zaten değişkenleri inject eder;
+# yerel geliştirme için de .env okunur)
+load_dotenv(BASE_DIR / ".env")
 
 
 # Quick-start development settings - unsuitable for production
@@ -78,11 +84,11 @@ WSGI_APPLICATION = "config.wsgi.application"
 DATABASES = {
     "default": {
         "ENGINE": "django.db.backends.postgresql",
-        "NAME": "postgres",
-        "USER": "admin",
-        "PASSWORD": "1234",
-        "HOST": "db",
-        "PORT": "5432",
+        "NAME": os.environ.get("DB_NAME", "acuchat_db"),
+        "USER": os.environ.get("DB_USER", "admin"),
+        "PASSWORD": os.environ.get("DB_PASSWORD", "1234"),
+        "HOST": os.environ.get("DB_HOST", "db"),
+        "PORT": os.environ.get("DB_PORT", "5432"),
     }
 }
 

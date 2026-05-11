@@ -116,12 +116,12 @@ def semantic_search(query: str, n_results: int = 2) -> list[dict]:
     metadatas = results.get("metadatas", [[]])[0]
     distances = results.get("distances", [[]])[0]
 
-    # Çok uzak (alakasız) sonuçları filtrele: cosine distance > 1.2 → atla
+    # Tüm sonuçları filtrelemeden dön (Test amaçlı kapatıldı)
     filtered = []
     for doc, meta, dist in zip(docs, metadatas, distances):
-        if dist <= 1.2:
-            filtered.append({
-                "text": doc,
-                "source": meta.get("source", "Bilinmeyen Kaynak")
-            })
+        print(f"[VectorStore] Distance: {dist:.4f} | Source: {meta.get('source')}")
+        filtered.append({
+            "text": doc,
+            "source": meta.get("source", "Bilinmeyen Kaynak")
+        })
     return filtered

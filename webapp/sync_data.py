@@ -6,6 +6,7 @@ import csv
 import io
 from bs4 import BeautifulSoup
 from urllib.parse import urljoin, urlparse
+import PyPDF2
 
 # Django Ayarları
 os.environ.setdefault("DJANGO_SETTINGS_MODULE", "config.settings")
@@ -166,12 +167,55 @@ def sync_manual_data():
                 source_name=source_name,
                 defaults={"raw_text": content}
             )
-            upsert_content(source_name, content)
             count += 1
             print(f"  ✓ {filename} ({len(content)} karakter)")
         except Exception as e:
             print(f"  ✗ {filename} (Hata: {e})")
+    return count
+
+
+def sync_pdf_data():
+    """DB'deki UniversityPDF kayıtlarını okur, metne çevirir ve ChromaDB'ye hazırlamak için kaydeder."""
+    from chat.models import UniversityPDF
+    import os
     
+    pdfs = UniversityPDF.objects.all()
+    if not pdfs:
+        print("\n[PDF VERİ] İşlenecek PDF bulunamadı.")
+        return 0
+
+    print(f"\n[PDF VERİ] {pdfs.count()} dosya işleniyor...")
+    count = 0
+    for pdf in pdfs:
+        if not pdf.file or not os.path.exists(pdf.file.path):
+            print(f"  ✗ {pdf.title} (Fiziksel dosya bulunamadı)")
+            continue
+            
+        try:
+            with open(pdf.file.path, 'rb') as f:
+                reader = PyPDF2.PdfReader(f)
+                text = ""
+                for page in reader.pages:
+                    extracted = page.extract_text()
+                    if extracted:
+                        text += extracted + "\n"
+                        
+            text = text.strip()
+            if len(text) < 50:
+                print(f"  ✗ {pdf.title} (Okunabilir metin çok kısa/yok)")
+                continue
+
+            source_name = f"PDF: {pdf.title}"
+            from chat.models import UniversityContent
+            UniversityContent.objects.update_or_create(
+                source_name=source_name,
+                defaults={"raw_text": text}
+            )
+            count += 1
+            print(f"  ✓ {pdf.title} ({len(text)} karakter)")
+        except Exception as e:
+            print(f"  ✗ {pdf.title} (Hata: {e})")
+            
     return count
 
 
@@ -220,13 +264,6 @@ def sync_deep():
 
 
 
-    # --- 4. Admin İçeriklerini İşle ---
-    admin_count = sync_admin_contents()
-    total_saved += admin_count
-
-   
-   
-   
     # --- 1. DB'deki ana bağlantıları işle ---
     for base in base_links:
         print(f"\n[ANA SAYFA] {base.title} → {base.url}")
@@ -238,7 +275,6 @@ def sync_deep():
                 source_name=source,
                 defaults={"raw_text": main_text}
             )
-            upsert_content(source, main_text)   # ChromaDB'ye vektörleştir
             total_saved += 1
             print(f"  ✓ Kaydedildi ({len(main_text)} karakter)")
         else:
@@ -256,7 +292,6 @@ def sync_deep():
                     source_name=source,
                     defaults={"raw_text": sub_text}
                 )
-                upsert_content(source, sub_text)   # ChromaDB'ye vektörleştir
                 total_saved += 1
                 print(f"    ✓ Kaydedildi ({len(sub_text)} karakter)")
             else:
@@ -274,7 +309,6 @@ def sync_deep():
                 source_name=source,
                 defaults={"raw_text": extra_text}
             )
-            upsert_content(source, extra_text)
             total_saved += 1
             print(f"    ✓ Kaydedildi ({len(extra_text)} karakter)")
         else:
@@ -284,20 +318,29 @@ def sync_deep():
     manual_count = sync_manual_data()
     total_saved += manual_count
 
+    # --- 4. PDF Verilerini İşle ---
+    pdf_count = sync_pdf_data()
+    total_saved += pdf_count
+
+    # --- 5. ChromaDB Senkronizasyonu (Tüm DB'den Tek Seferde) ---
+    print("\n[CHROMADB SİNKRONİZASYON] Veritabanı topluca ChromaDB'ye aktarılıyor...")
+    chroma_count = sync_admin_contents()
+
     print(f"\n{'=' * 60}")
     print(f"  Tamamlandı. Toplam {total_saved} kayıt güncellendi/eklendi.")
-    print(f"  (Web: {total_saved - manual_count}, Manuel: {manual_count})")
+    print(f"  (Web: {total_saved - manual_count - pdf_count}, Manuel: {manual_count}, PDF: {pdf_count})")
+    print(f"  ChromaDB'ye basılan toplam benzersiz sayfa: {chroma_count}")
     print(f"{'=' * 60}")
 
 
 
 
 def sync_admin_contents():
-    """Admin panelinden eklenen UniversityContent kayıtlarını ChromaDB'ye işler."""
+    """Tüm UniversityContent kayıtlarını (Web + Manuel + Admin) ChromaDB'ye tek seferde işler."""
     from chat.models import UniversityContent
     
     contents = UniversityContent.objects.all()
-    print(f"\n[ADMİN İÇERİKLER] {contents.count()} kayıt işleniyor...")
+    print(f"\n[CHROMADB] {contents.count()} benzersiz sayfa işleniyor...")
     count = 0
     for content in contents:
         try:

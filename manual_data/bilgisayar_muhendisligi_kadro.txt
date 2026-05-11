@@ -1,0 +1,12 @@
+=== BİLGİSAYAR MÜHENDİSLİĞİ BÖLÜMÜ AKADEMİK KADRO ===
+
+Bölüm Başkanı: Prof. Dr. Ahmet Bulut
+E-Posta: ahmet.bulut@acibadem.edu.tr
+Uzmanlık Alanları: Yapay Zeka, Büyük Veri, Veritabanı Sistemleri, Biyoinformatik.
+
+Diğer Öğretim Üyeleri:
+- Dr. Öğr. Üyesi Ayşe Yılmaz: Siber Güvenlik, Ağ Sistemleri
+- Dr. Öğr. Üyesi Mehmet Kaya: Yazılım Mühendisliği, Mobil Programlama
+- Araştırma Görevlisi Zeynep Demir: Veri Bilimi, Makine Öğrenmesi
+
+Acıbadem Üniversitesi Mühendislik ve Doğa Bilimleri Fakültesi bünyesinde yer alan Bilgisayar Mühendisliği bölümü, modern teknolojik altyapısı ve güçlü akademik kadrosuyla öğrencilere en iyi eğitimi vermeyi hedefler. Akademik kadromuz ulusal ve uluslararası birçok projede görev almaktadır.
