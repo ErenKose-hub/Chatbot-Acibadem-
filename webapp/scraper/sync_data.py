@@ -19,22 +19,14 @@ if not apps.ready:
 from chat.models import SyncStatus, UniversityLink, UniversityContent
 from chat.vector_store import upsert_content
 
-# Gürültü olarak değlendirilen tag'ler
-NOISE_TAGS = ["script", "style", "nav", "footer", "header", "aside", "form", "noscript", "iframe", "button"]
+# Gürültü olarak değerlendirilecek tag'ler (Yalnızca script, style vb. teknik tag'ler)
+NOISE_TAGS = ["script", "style", "noscript", "iframe"]
 
-# Gürültü class/id kalıpları (kısmi eşleşme)
-NOISE_PATTERNS = [
-    "sidebar-menu", "mobil-breadcrumb", "breadcrumb-wrapper", "footer-content",
-    "sticky", "cookie", "popup", "modal", "overlay", "social", "share",
-    "search-bar", "language-switch", "quick-links", "hizli-erisim",
-]
+# Gürültü class/id kalıpları (kısmi eşleşme) - Boş bırakıldı, her şeyi okusun
+NOISE_PATTERNS = []
 
-# Buton / CTA metin kalıpları — bu metinleri içeren tag'leri sil
-BUTTON_TEXT_PATTERNS = [
-    r"Sor Cevaplayalım", r"Başvuru Yap", r"Giriş", r"\bGiriş\b", r"Üye Ol",
-    r"Kaydol", r"Detay", r"Daha Fazla", r"Tümü Gör", r"Yükle",
-    r"Ara\.\.\.", r"Arama", r"Menu", r"Menü",
-]
+# Buton / CTA metin kalıpları - Boş bırakıldı, butonları silmesin
+BUTTON_TEXT_PATTERNS = []
 
 # Alt sayfa URL'lerinde aranacak anahtar kelimeler
 LINK_KEYWORDS = ["kontenjan", "puan", "akademik", "kadro", "ogretim", "bolum", "ders", "ucret", "program", "fakulte"]
@@ -42,7 +34,12 @@ LINK_KEYWORDS = ["kontenjan", "puan", "akademik", "kadro", "ogretim", "bolum", "
 # Her senkronizasyonda mutlaka çekilecek kritik URL'ler (DB'de link kaydı olmasa bile)
 EXTRA_URLS = [
     "https://www.acibadem.edu.tr/aday/ogrenci/egitim/lisans/lisans-kontenjan-ve-puan-tablosu",
-    "https://www.acibadem.edu.tr/akademik/lisans",
+    "https://www.acibadem.edu.tr/akademik/lisans", "https://www.acibadem.edu.tr/akademik/lisans/muhendislik-ve-doga-bilimleri-fakultesi/bolumler/bilgisayar-muhendisligi/bolum-baskaninin-mesaji", "https://www.acibadem.edu.tr/akademik/lisans/muhendislik-ve-doga-bilimleri-fakultesi/bolumler/bilgisayar-muhendisligi/hakkinda", "https://www.acibadem.edu.tr/akademik/lisans/iletisim-hizmetleri-ve-halkla-iliskiler", "https://www.acibadem.edu.tr/akademik/lisans/tip-fakultesi/hakkinda", "https://www.acibadem.edu.tr/akademik/lisans/tip-fakultesi/stratejik-plan", 
+    "https://www.acibadem.edu.tr/akademik/lisans/tip-fakultesi/sikca-sorulan-sorular", "https://www.acibadem.edu.tr/akademik/lisans/muhendislik-ve-doga-bilimleri-fakultesi/bolumler/bilgisayar-muhendisligi/akademik-kadro", 
+    "https://www.acibadem.edu.tr/akademik/lisans/muhendislik-ve-doga-bilimleri-fakultesi/bolumler/molekuler-biyoloji-ve-genetik/bolum-baskaninin-mesaji", "https://www.acibadem.edu.tr/akademik/lisans/muhendislik-ve-doga-bilimleri-fakultesi/bolumler/biyomedikal-muhendisligi/bolum-baskaninin-mesaji",
+    "https://www.acibadem.edu.tr/akademik/lisans/muhendislik-ve-doga-bilimleri-fakultesi/bolumler/biyomedikal-muhendisligi/vizyon-misyon", "https://www.acibadem.edu.tr/akademik/lisans/insan-ve-toplum-bilimleri-fakultesi/bolumler/psikoloji-en/bolum-baskaninin-mesaji", "https://www.acibadem.edu.tr/akademik/lisans/saglik-bilimleri-fakultesi/bolumler/beslenme-ve-diyetetik/bolum-baskaninin-mesaji",
+    "https://www.acibadem.edu.tr/akademik/lisans/saglik-bilimleri-fakultesi/bolumler/hemsirelik/bolum-baskaninin-mesaji", "https://www.acibadem.edu.tr/uluslararasi-ofis/degisim-programlari/erasmus/ogrenci-hareketliligi", "https://www.acibadem.edu.tr/universite", 
+    "https://www.acibadem.edu.tr/universite/hakkinda/neden-acu", "https://www.acibadem.edu.tr/ogrenci/acuda-yasam/saglik-hizmetleri", "https://www.acibadem.edu.tr/ogrenci/acuda-yasam/konferans-merkezi", "https://www.acibadem.edu.tr/ogrenci/acuda-yasam/diger-hizmetler", ""
 ]
 
 OBS_INDEX_URL = "https://obs.acibadem.edu.tr/oibs/bologna/unitSelection.aspx?type=lis&lang=tr"
@@ -155,15 +152,7 @@ def clean_obs_soup(soup):
         tag.decompose()
 
     for selector in [
-        "#Header1",
-        "#Footer1",
-        ".navbar",
-        ".main-sidebar",
-        ".main-header",
-        ".main-footer",
         ".preloader",
-        ".breadcrumb",
-        ".nav",
     ]:
         for el in soup.select(selector):
             el.decompose()
@@ -254,24 +243,26 @@ def fetch_and_parse_csv(csv_url):
 
 def extract_main_content(soup):
     """
-    Sayfanın asıl içerik bloğunu bulmaya çalışır.
-    Önce semantik tag'leri dener, bulamazsa tüm body'ye düşer.
+    Sayfanın asıl içerik bloğunu filtreleri kaldırarak doğrudan alır.
+    Gürültü tag'leri clean_soup() içinde silindiği için, doğrudan sayfanın saf metni (body) alınır.
     """
-    # Öncelik sırası: <div class="sidebar-page-content"> → <main> → <article>
-    candidates = [
-        soup.find("div", class_=lambda c: c and "sidebar-page-content" in c),
-        soup.find("main"),
-        soup.find("article"),
-        soup.find(attrs={"role": "main"}),
-        soup.find("div", id=lambda i: i and "content" in i.lower()),
-        soup.body,
-    ]
+    if soup.body:
+        text = " ".join(soup.body.get_text(separator=" ", strip=True).split())
+    else:
+        text = " ".join(soup.get_text(separator=" ", strip=True).split())
 
-    for candidate in candidates:
-        if candidate:
-            text = " ".join(candidate.get_text(separator=" ", strip=True).split())
-            if len(text) >= MIN_TEXT_LENGTH:
-                return text
+    if len(text) >= MIN_TEXT_LENGTH:
+        # Metin Temizleme / Sanitization: Önemli anahtar kelimelere ekstra ağırlık ver
+        keywords = ["hakkında", "üniversitemiz", "tarihçe", "misyon", "vizyon"]
+        sentences = text.split(". ")
+        emphasized_sentences = []
+        for s in sentences:
+            if any(kw in s.lower() for kw in keywords):
+                emphasized_sentences.append(f"[ÖNEMLİ KURUMSAL BİLGİ] {s}")
+            else:
+                emphasized_sentences.append(s)
+        
+        return ". ".join(emphasized_sentences)
 
     return None
 
@@ -332,6 +323,15 @@ def get_content_and_links(url):
         # Asıl içerik bloğunu çıkar
         clean_text = extract_main_content(soup)
         
+        # DEBUG PRİNT: O URL'den tam olarak ne çekildiğini görelim
+        if clean_text:
+            print(f"\n[DEBUG] URL: {url} | Çekilen Metin Uzunluğu: {len(clean_text)}")
+            print(f"[DEBUG] Çekilen Metin Başlangıcı: {clean_text[:500]}...")
+            if "bölüm başkanı" in clean_text.lower() or "bolum baskani" in clean_text.lower():
+                print(f"[DEBUG] -> BU METİNDE BÖLÜM BAŞKANI BİLGİSİ BULUNDU!")
+        else:
+            print(f"\n[DEBUG] URL: {url} | DİKKAT: Hiç metin çekilemedi!")
+
         # Eğer sayfada CSV linki varsa (dinamik yüklenen tablolar), indirip metne ekle
         for a in soup.find_all("a", href=True):
             if a["href"].endswith(".csv"):

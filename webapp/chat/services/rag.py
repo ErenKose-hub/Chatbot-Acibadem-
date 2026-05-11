@@ -98,6 +98,18 @@ def rerank_docs(results: list[dict], user_text: str) -> list[dict]:
     for item in results:
         doc_normalized = normalize_text(item["text"])
         score = sum(1 for w in query_words if w in doc_normalized)
+        
+        # Ağırlıklandırma (Weighting): Ana site ve Extra linklere öncelik ver
+        source = item.get("source", "")
+        if source.startswith("Extra:"):
+            score += 20  # En yüksek öncelik
+        elif source.startswith("Ana:") or source.startswith("Alt:"):
+            score += 3
+        elif source.startswith("Manuel:"):
+            score += 4
+        elif source.startswith("OBS:"):
+            score += 0  # OBS'ye ekstra puan yok
+            
         scored.append((score, item))
     scored.sort(key=lambda x: x[0], reverse=True)
     return [item for _, item in scored]
@@ -131,7 +143,7 @@ def db_sources_for_departments(departments: list[str]) -> list[dict]:
     return results
 
 
-def build_context(user_text: str, n_results: int = 3) -> tuple[str, list[str]]:
+def build_context(user_text: str, n_results: int = 10) -> tuple[str, list[str]]:
     """Build RAG context with semantic search, DB source boost, filtering and reranking."""
     started_at = time.perf_counter()
     normalized_query = normalize_text(user_text)
@@ -150,54 +162,70 @@ def build_context(user_text: str, n_results: int = 3) -> tuple[str, list[str]]:
         logger.exception("ChromaDB search failed: %s", e)
         results = []
 
+
     if not results and not db_boosted_results:
         return "", []
 
-    strict_filtered = []
-    seen_sources = set()
-    for item in db_boosted_results + results:
-        if item["source"] in seen_sources:
-            continue
-        seen_sources.add(item["source"])
 
-        doc_text_norm = normalize_text(item["text"])
-        source_norm = normalize_text(item["source"])
-        if is_test_source(item["source"], item["text"]):
-            continue
 
-        if departments:
-            if not any(
-                term in doc_text_norm
-                for dept in departments
-                for term in DEPARTMENT_TERMS[dept]
-            ):
-                continue
+    return "\n\n".join([r["text"] for r in results]), [r["source"] for r in results]
 
-            if "tip" in departments:
-                if any(bad in source_norm for bad in ["beslenme", "diyetetik", "duyurular"]):
-                    continue
+    # return "".join(results), []
 
-        strict_filtered.append(item)
+    # strict_filtered = []
+    # seen_sources = set()
+    # for item in db_boosted_results + results:
+    #     if item["source"] in seen_sources:
+    #         continue
+    #     seen_sources.add(item["source"])
 
-    if not strict_filtered:
-        return "", []
+    #     doc_text_norm = normalize_text(item["text"])
+    #     source_norm = normalize_text(item["source"])
+    #     if is_test_source(item["source"], item["text"]):
+    #         continue
 
-    results = rerank_docs(strict_filtered, user_text)
-    words = [w for w in user_text.split() if len(w) > 2]
-    parts = []
-    sources = []
-    for item in results:
-        clean = clean_raw_text(item["text"])
-        clean = extract_relevant_chunks(clean, words)
-        if len(clean) > 100:
-            parts.append(clean[:1800])
-            sources.append(item["source"])
+    #     if departments:
+    #         if not any(
+    #             term in doc_text_norm
+    #             for dept in departments
+    #             for term in DEPARTMENT_TERMS[dept]
+    #         ):
+    #             continue
 
-    context_text = "\n--- SAYFA AYRACI ---\n".join(parts)
-    logger.info(
-        "RAG context built in %.2fs using %d source(s), %d chars",
-        time.perf_counter() - started_at,
-        len(set(sources)),
-        len(context_text),
-    )
-    return context_text, list(set(sources))
+    #         if "tip" in departments:
+    #             if any(bad in source_norm for bad in ["beslenme", "diyetetik", "duyurular"]):
+    #                 continue
+
+    #     strict_filtered.append(item)
+
+    # if not strict_filtered:
+    #     return "", []
+
+    # results = rerank_docs(strict_filtered, user_text)
+    # words = [w for w in user_text.split() if len(w) > 2]
+    # parts = []
+    # sources = []
+    # for item in results:
+    #     clean = clean_raw_text(item["text"])
+    #     clean = extract_relevant_chunks(clean, words)
+    #     if len(clean) > 100:
+    #         source_name = item["source"]
+    #         # Metin Analizi Etiketi Ekleme (LLM'e kaynağın doğasını belirtmek için)
+    #         if source_name.startswith("Extra:") or source_name.startswith("Ana:") or source_name.startswith("Alt:"):
+    #             clean = f"[GENEL BİLGİ - ANA SİTE] {clean}"
+    #         elif source_name.startswith("OBS:"):
+    #             clean = f"[DERS BİLGİSİ - BOLOGNA OBS] {clean}"
+    #         elif source_name.startswith("Manuel:"):
+    #             clean = f"[ÖZEL BİLGİ - MANUEL KAYIT] {clean}"
+                
+    #         parts.append(clean[:1800])
+    #         sources.append(source_name)
+
+    # context_text = "\n--- SAYFA AYRACI ---\n".join(parts)
+    # logger.info(
+    #     "RAG context built in %.2fs using %d source(s), %d chars",
+    #     time.perf_counter() - started_at,
+    #     len(set(sources)),
+    #     len(context_text),
+    # )
+

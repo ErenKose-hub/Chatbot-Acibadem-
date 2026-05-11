@@ -4,8 +4,10 @@ import time
 
 import requests
 
-OLLAMA_BASE_URL = os.environ.get("OLLAMA_BASE_URL", "http://llm-service:11434")
-OLLAMA_MODEL = os.environ.get("OLLAMA_MODEL", "qwen2.5:3b")
+# Docker içinden Mac host'undaki (lokal) Ollama'ya erişmek için 'host.docker.internal' kullanılır.
+# Eğer Docker dışında çalıştırıyorsan 'http://localhost:11434' yapabilirsin.
+OLLAMA_BASE_URL = os.environ.get("OLLAMA_BASE_URL", "http://host.docker.internal:11434")
+OLLAMA_MODEL = os.environ.get("OLLAMA_MODEL", "qwen:7b")
 logger = logging.getLogger(__name__)
 
 
@@ -19,9 +21,10 @@ def call_ollama_chat(system_instructions: str, messages: list[dict]) -> str:
             "stream": False,
             "keep_alive": "10m",
             "options": {
-                "temperature": 0.1,
-                "num_ctx": 4096,
-                "num_predict": 160,
+                "temperature": 0.3,
+                "top_p": 0.9,
+                "repeat_penalty": 1.2,
+                "num_predict": 1024
             },
         },
         timeout=180,

@@ -65,39 +65,48 @@ def generate_chat_response(user_text: str, history: list | None = None, session_
         persist_chat_message(user_text, NO_DATA_RESPONSE, history, session_key=session_key)
         return NO_DATA_RESPONSE, history, []
 
-    direct_response = direct_answer_from_context(user_text, fresh_context)
-    if direct_response:
-        manual_sources = [source for source in sources if source.startswith("Manuel:") and not is_test_source(source)]
-        sources = manual_sources or sources
-        persist_chat_message(user_text, direct_response, history, session_key=session_key)
-        return direct_response, history, sources
+    system_prompt = build_system_prompt(fresh_context)
 
-    messages = []
-    past_convo = "".join(
-        f"Kullanıcı: {chat['user']}\nAsistan: {chat['bot']}\n"
-        for chat in history[-3:]
-    )
-    if past_convo:
-        messages.append({"role": "user", "content": f"Önceki konuşmamız özeti:\n{past_convo}"})
-        messages.append({"role": "assistant", "content": "Anladım, önceki konuşmalarımızı hatırlayarak net cevaplar vereceğim."})
-    messages.append({"role": "user", "content": user_text})
 
-    try:
-        bot_response = call_ollama_chat(build_system_prompt(fresh_context), messages)
-        bot_response = clean_bot_response(bot_response)
-        if is_bad_bot_response(bot_response):
-            logger.warning("Rejected low-quality model response: %s", bot_response[:200])
-            bot_response = NO_DATA_RESPONSE
-            sources = []
+    bot_response = call_ollama_chat(system_prompt, [{"role": "user", "content": user_text}])
+    persist_chat_message(user_text, bot_response, history, session_key=session_key)
+    return bot_response, history, sources
 
-        logger.info("RAG sources used: %s", sources)
-        persist_chat_message(user_text, bot_response, history, session_key=session_key)
-        return bot_response, history, sources
-    except Exception as e:
-        logger.exception("Chat response generation failed: %s", e)
-        fallback_response = "Şu an sistemimde bir yoğunluk var, lütfen biraz bekleyip tekrar sorunuz."
-        persist_chat_message(user_text, fallback_response, history, session_key=session_key)
-        return fallback_response, history, []
+
+
+    # direct_response = direct_answer_from_context(user_text, fresh_context)
+    # if direct_response:
+    #     manual_sources = [source for source in sources if source.startswith("Manuel:") and not is_test_source(source)]
+    #     sources = manual_sources or sources
+    #     persist_chat_message(user_text, direct_response, history, session_key=session_key)
+    #     return direct_response, history, sources
+
+    # messages = []
+    # past_convo = "".join(
+    #     f"Kullanıcı: {chat['user']}\nAsistan: {chat['bot']}\n"
+    #     for chat in history[-3:]
+    # )
+    # if past_convo:
+    #     messages.append({"role": "user", "content": f"Önceki konuşmamız özeti:\n{past_convo}"})
+    #     messages.append({"role": "assistant", "content": "Anladım, önceki konuşmalarımızı hatırlayarak net cevaplar vereceğim."})
+    # messages.append({"role": "user", "content": user_text})
+
+    # try:
+    #     bot_response = call_ollama_chat(build_system_prompt(fresh_context), messages)
+    #     bot_response = clean_bot_response(bot_response)
+    #     if is_bad_bot_response(bot_response):
+    #         logger.warning("Rejected low-quality model response: %s", bot_response[:200])
+    #         bot_response = NO_DATA_RESPONSE
+    #         sources = []
+
+    #     logger.info("RAG sources used: %s", sources)
+    #     persist_chat_message(user_text, bot_response, history, session_key=session_key)
+    #     return bot_response, history, sources
+    # except Exception as e:
+    #     logger.exception("Chat response generation failed: %s", e)
+    #     fallback_response = "Şu an sistemimde bir yoğunluk var, lütfen biraz bekleyip tekrar sorunuz."
+    #     persist_chat_message(user_text, fallback_response, history, session_key=session_key)
+    #     return fallback_response, history, []
 
 
 def chat_home(request):

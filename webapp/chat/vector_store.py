@@ -8,6 +8,7 @@ Bu modül şunları sağlar:
   - semantic_search(query)   : En yakın N belgeyi cosine benzerliğiyle döndürür
 """
 
+from bs4 import exceptions
 import os
 import hashlib
 from sentence_transformers import SentenceTransformer
@@ -15,7 +16,7 @@ import chromadb
 
 # ── Yapılandırma ──────────────────────────────────────────────────────────────
 CHROMA_PERSIST_DIR = os.environ.get("CHROMA_PERSIST_DIR", "db/chroma")
-EMBEDDING_MODEL_NAME = "paraphrase-multilingual-MiniLM-L12-v2"
+EMBEDDING_MODEL_NAME = "intfloat/multilingual-e5-small"
 COLLECTION_NAME = "university_content"
 
 # ── Singleton nesneleri (modül seviyesinde bir kez başlatılır) ────────────────
@@ -75,9 +76,9 @@ def upsert_content(source_name: str, text: str) -> int:
         # CSV veya KV formatındaki verileri kayıt bazlı böl
         chunks = [c.strip() for c in text.split("--- KAYIT ---") if len(c.strip()) > 40]
     else:
-        # Düz metinleri ~1500 karakterlik parçalara böl (200 karakter overlap ile)
+        # Düz metinleri ~1000 karakterlik parçalara böl (200 karakter overlap ile)
         chunks = []
-        chunk_size = 1500
+        chunk_size = 1000
         overlap = 200
         start = 0
         while start < len(text):
@@ -112,6 +113,7 @@ def semantic_search(query: str, n_results: int = 2) -> list[dict]:
     collection = get_chroma_collection()
     count = collection.count()
 
+
     if count == 0:
         print("[VectorStore] Koleksiyon boş; önce sync_data.py çalıştırın.")
         return []
@@ -124,16 +126,26 @@ def semantic_search(query: str, n_results: int = 2) -> list[dict]:
         include=["documents", "metadatas", "distances"],
     )
 
+
     docs = results.get("documents", [[]])[0]
     metadatas = results.get("metadatas", [[]])[0]
     distances = results.get("distances", [[]])[0]
 
+
+    print(distances)
+
     # Çok uzak (alakasız) sonuçları filtrele: cosine distance > 1.2 → atla
     filtered = []
     for doc, meta, dist in zip(docs, metadatas, distances):
-        if dist <= 1.2:
+        if dist < 0.19:
             filtered.append({
                 "text": doc,
-                "source": meta.get("source", "Bilinmeyen Kaynak")
+                "source": meta.get("source", "Bilinmeyen Kaynak"),
+                "distance": dist
             })
-    return filtered
+
+
+    filtered.sort(key=lambda x: x["distance"])
+    return filtered[:10]
+
+

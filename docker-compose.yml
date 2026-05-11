@@ -8,7 +8,7 @@ services:
       - POSTGRES_USER=${DB_USER:-admin}
       - POSTGRES_PASSWORD=${DB_PASSWORD:-1234}
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-admin} -d ${DB_NAME:-acuchat_db}"]
+      test: [ "CMD-SHELL", "pg_isready -U ${DB_USER:-admin} -d ${DB_NAME:-acuchat_db}" ]
       interval: 5s
       timeout: 5s
       retries: 10
@@ -21,16 +21,16 @@ services:
       - ./webapp/ollama-entrypoint.sh:/ollama-entrypoint.sh:ro
     ports:
       - "${OLLAMA_PORT:-11434}:11434"
-    entrypoint: ["/bin/sh", "/ollama-entrypoint.sh"]
+    entrypoint: [ "/bin/sh", "/ollama-entrypoint.sh" ]
     healthcheck:
-      test: ["CMD-SHELL", "ollama list | grep -q qwen2.5:3b"]
+      test: [ "CMD-SHELL", "ollama list" ]
       interval: 15s
       timeout: 10s
       retries: 20
 
   webapp:
     build: ./webapp
-    command: ["/bin/sh", "/app/entrypoint.sh"]
+    command: [ "/bin/sh", "/app/entrypoint.sh" ]
     volumes:
       - ./webapp:/app
       - hf_cache:/root/.cache/huggingface
@@ -47,8 +47,8 @@ services:
       - DB_HOST=${DB_HOST:-db}
       - DB_PORT=${DB_PORT:-5432}
       - CHROMA_PERSIST_DIR=${CHROMA_PERSIST_DIR:-/app/db/chroma}
-      - OLLAMA_BASE_URL=${OLLAMA_BASE_URL:-http://llm-service:11434}
-      - OLLAMA_MODEL=${OLLAMA_MODEL:-qwen2.5:3b}
+      - OLLAMA_BASE_URL=${OLLAMA_BASE_URL:-http://host.docker.internal:11434}
+      - OLLAMA_MODEL=${OLLAMA_MODEL:-llama3.1:8b}
     depends_on:
       db:
         condition: service_healthy
