@@ -1,213 +1,249 @@
-"""
-views.py — Acıbadem Üniversitesi Chatbot View Katmanı
-
-Bu dosya yalnızca HTTP request/response döngüsünü yönetir.
-Tüm iş mantığı chat/services/ altındaki modüllerde yaşar:
-  - direct_answer  : Basit sorulara anında yanıt (LLM çağrısı yok)
-  - rag_service    : ChromaDB sorgulama + Strict Bölüm Filtreleme
-  - prompt_manager : Sistem promptları ve yanıt temizleme
-  - llm_service    : Ollama HTTP çağrıları
-"""
-
 import json
-from django.shortcuts import render
-from django.http import JsonResponse
-from django.db import connection
+import logging
+import re
+
+from django.conf import settings
+from django.http import FileResponse, Http404, JsonResponse
+from django.db.models import Max
+from django.shortcuts import redirect, render
 from django.views.decorators.csrf import csrf_exempt
 
-from .models import ChatMessage
+from .models import ChatMessage, SyncStatus, UniversityContent
+from .services.llm import OLLAMA_MODEL, call_ollama_chat, list_ollama_models
+from .services.prompts import NO_DATA_RESPONSE, build_system_prompt
+from .services.rag import build_context, direct_answer_from_context, has_priority_keyword
+from .services.response_quality import is_bad_bot_response
+from .services.text_cleaning import clean_bot_response, is_test_source, normalize_text
 from .vector_store import get_chroma_collection
-from .services.direct_answer import check_direct_answer
-from .services.rag_service import build_context
-from .services.prompt_manager import build_system_prompt, build_api_prompt, clean_bot_response
-from .services.llm_service import ask_llm, generate_llm, check_ollama_health, OLLAMA_MODEL, OLLAMA_BASE_URL
+
+logger = logging.getLogger(__name__)
+MAX_MESSAGE_LENGTH = 1000
+MESSAGE_TOO_LONG_ERROR = f"Mesaj en fazla {MAX_MESSAGE_LENGTH} karakter olabilir."
 
 
-# ---------------------------------------------------------------------------
-# Yardımcı: Keyword kontrolü (chat_api hibrit karar için)
-# ---------------------------------------------------------------------------
-
-_PRIORITY_KEYWORDS = [
-    "kontenjan", "puan", "ucret", "burs", "siralam",
-    "muhendislik", "tip", "eczacilik",
-]
-
-
-def _has_priority_keyword(normalized_text: str) -> bool:
-    return any(kw in normalized_text for kw in _PRIORITY_KEYWORDS)
+def persist_chat_message(user_text: str, bot_response: str, history: list, session_key: str = "") -> None:
+    history.append({"user": user_text, "bot": bot_response})
+    if session_key:
+        ChatMessage.objects.create(
+            user_message=user_text,
+            bot_response=bot_response,
+            session_key=session_key,
+        )
 
 
-def _normalize(text: str) -> str:
-    text = text.lower()
-    for src, dst in [("ı", "i"), ("ü", "u"), ("ö", "o"), ("ş", "s"), ("ç", "c"), ("ğ", "g")]:
-        text = text.replace(src, dst)
-    return text
+def validate_user_message(user_text: str) -> str | None:
+    if not user_text:
+        return "Mesaj boş olamaz."
+    if len(user_text) > MAX_MESSAGE_LENGTH:
+        return MESSAGE_TOO_LONG_ERROR
+    return None
 
 
-# ---------------------------------------------------------------------------
-# View: Sağlık Kontrolü — /health/
-# ---------------------------------------------------------------------------
+def generate_chat_response(user_text: str, history: list | None = None, session_key: str = "") -> tuple[str, list, list]:
+    """Shared RAG + LLM response flow for the web UI and JSON API."""
+    history = history or []
+    normalized = normalize_text(user_text)
+    word_count = len(user_text.split())
 
-def health_check(request):
-    """
-    Tüm bağımlılıkların durumunu kontrol edip JSON döndürür.
+    chitchat_words = [
+        "selam", "merhaba", "nasilsin", "naber", "hey",
+        "merhabalar", "selamlar", "sa", "slm",
+    ]
+    if normalized in chitchat_words or len(user_text) < 3 or (
+        not has_priority_keyword(normalized) and word_count < 3
+    ):
+        greeting = (
+            "Merhaba! Ben Acıbadem Üniversitesi Akademik Asistanıyım. "
+            "Size üniversitemiz, akademik programlar veya kontenjanlar "
+            "hakkında bilgi verebilirim. Ne öğrenmek istersiniz?"
+        )
+        persist_chat_message(user_text, greeting, history, session_key=session_key)
+        return greeting, history, []
 
-    Response örneği:
-        {
-            "status": "ok",
-            "postgres": "ok",
-            "chromadb": "ok",
-            "ollama": "ok",
-            "model": "qwen2.5:3b"
-        }
-    """
-    result = {}
+    fresh_context, sources = build_context(user_text)
+    if not fresh_context:
+        persist_chat_message(user_text, NO_DATA_RESPONSE, history, session_key=session_key)
+        return NO_DATA_RESPONSE, history, []
 
-    # 1. PostgreSQL
+    direct_response = direct_answer_from_context(user_text, fresh_context)
+    if direct_response:
+        manual_sources = [source for source in sources if source.startswith("Manuel:") and not is_test_source(source)]
+        sources = manual_sources or sources
+        persist_chat_message(user_text, direct_response, history, session_key=session_key)
+        return direct_response, history, sources
+
+    messages = []
+    past_convo = "".join(
+        f"Kullanıcı: {chat['user']}\nAsistan: {chat['bot']}\n"
+        for chat in history[-3:]
+    )
+    if past_convo:
+        messages.append({"role": "user", "content": f"Önceki konuşmamız özeti:\n{past_convo}"})
+        messages.append({"role": "assistant", "content": "Anladım, önceki konuşmalarımızı hatırlayarak net cevaplar vereceğim."})
+    messages.append({"role": "user", "content": user_text})
+
     try:
-        with connection.cursor() as cursor:
-            cursor.execute("SELECT 1")
-        result["postgres"] = "ok"
+        bot_response = call_ollama_chat(build_system_prompt(fresh_context), messages)
+        bot_response = clean_bot_response(bot_response)
+        if is_bad_bot_response(bot_response):
+            logger.warning("Rejected low-quality model response: %s", bot_response[:200])
+            bot_response = NO_DATA_RESPONSE
+            sources = []
+
+        logger.info("RAG sources used: %s", sources)
+        persist_chat_message(user_text, bot_response, history, session_key=session_key)
+        return bot_response, history, sources
     except Exception as e:
-        result["postgres"] = f"error: {e}"
+        logger.exception("Chat response generation failed: %s", e)
+        fallback_response = "Şu an sistemimde bir yoğunluk var, lütfen biraz bekleyip tekrar sorunuz."
+        persist_chat_message(user_text, fallback_response, history, session_key=session_key)
+        return fallback_response, history, []
 
-    # 2. ChromaDB
-    try:
-        col = get_chroma_collection()
-        doc_count = col.count()
-        result["chromadb"] = f"ok ({doc_count} doküman)"
-    except Exception as e:
-        result["chromadb"] = f"error: {e}"
-
-    # 3. Ollama
-    result["ollama"] = "ok" if check_ollama_health() else f"error: {OLLAMA_BASE_URL} ulaşılamıyor"
-    result["model"] = OLLAMA_MODEL
-
-    # Genel durum
-    has_error = any("error" in str(v) for v in result.values())
-    result["status"] = "degraded" if has_error else "ok"
-
-    status_code = 200 if result["status"] == "ok" else 503
-    return JsonResponse(result, status=status_code)
-
-
-# ---------------------------------------------------------------------------
-# View: Ana Sohbet — /
-# ---------------------------------------------------------------------------
 
 def chat_home(request):
-    """Ana sohbet arayüzünü yöneten view."""
-    if request.method == "GET":
+    """Main chat interface with sidebar conversation history."""
+    session_key = request.session.session_key
+    if not session_key:
+        request.session.save()
+        session_key = request.session.session_key
+
+    # New chat: keep the old session in DB but start a fresh one
+    if request.method == "GET" and request.GET.get("new_chat"):
+        request.session.cycle_key()
         request.session["chat_history"] = []
+        request.session.modified = True
+        return redirect("chat_home")
+
+    # Switch to a specific session
+    target_session = request.GET.get("session", session_key)
+
+    if request.method == "GET":
+        db_messages = list(ChatMessage.objects.filter(session_key=target_session).values("user_message", "bot_response"))
+        request.session["chat_history"] = [
+            {"user": m["user_message"], "bot": m["bot_response"]} for m in db_messages
+        ]
     elif "chat_history" not in request.session:
         request.session["chat_history"] = []
 
     if request.method == "POST":
         user_text = request.POST.get("message", "").strip()
+        validation_error = validate_user_message(user_text)
+        if validation_error:
+            return JsonResponse({"error": validation_error}, status=400)
 
-        # ── 1. DIRECT ANSWER KONTROLÜ (TEST İÇİN DEVRE DIŞI) ───────────────────
-        # direct = check_direct_answer(user_text)
-        # if direct:
-        #     return JsonResponse({
-        #         "response": direct
-        #     })
-        
-        # ── 2. RAG: ChromaDB + Strict Bölüm Filtreleme ───────────────────────
-        fresh_context, sources = build_context(user_text)
+        active_session_key = target_session if target_session else session_key
 
-        if not fresh_context:
-            return JsonResponse({
-                "response": (
-                    "Üzgünüm, aradığınız bölüm (veya konu) hakkında sistemimde "
-                    "güncel bir veri bulunmamaktadır. "
-                    "Lütfen aday öğrenci sayfasını (aday.acibadem.edu.tr) ziyaret edin."
-                )
-            })
-
-        # ── 3. KONUŞMA GEÇMİŞİ VE MESAJ LİSTESİ ────────────────────────────────
-        history = request.session["chat_history"]
-
-        # ── 4. SİSTEM PROMPT'U ────────────────────────────────────────────────
-        system_prompt = build_system_prompt(fresh_context)
-
-        messages = []
-        # Sadece son 3 konuşmayı (6 mesaj) LLM'e ver
-        for chat in history[-3:]:
-            messages.append({"role": "user", "content": chat["user"]})
-            messages.append({"role": "assistant", "content": chat["bot"]})
-            
-        messages.append({"role": "user", "content": user_text})
-
-        # ── 6. LLM ÇAĞRISI ───────────────────────────────────────────────────
-        print("\n=== [DEBUG] LLM PAYLOAD ===")
-        print(f"System Prompt:\n{system_prompt}")
-        print(f"Messages:\n{messages}")
-        print("===========================\n")
-        bot_response = ask_llm(system_prompt, messages)
-        bot_response = clean_bot_response(bot_response)
-
-        if sources:
-            source_note = "\n\n(Kaynak: " + ", ".join(sources) + ")"
-            print(f"[RAG] Kullanılan Kaynaklar: {sources}")
-            bot_response += source_note
-
-        # ── 7. GEÇMİŞ & VERİTABANI KAYDI ────────────────────────────────────
-        history.append({"user": user_text, "bot": bot_response})
+        bot_response, history, sources = generate_chat_response(
+            user_text, request.session["chat_history"], session_key=active_session_key
+        )
         request.session["chat_history"] = history
         request.session.modified = True
-        ChatMessage.objects.create(user_message=user_text, bot_response=bot_response)
 
-        return JsonResponse({"response": bot_response})
+        return JsonResponse({"response": bot_response, "sources": sources})
 
-    return render(request, "chat/index.html")
+    # Build conversation list for sidebar (group by session_key, show first user message as title)
+    sessions = (
+        ChatMessage.objects.values("session_key")
+        .annotate(last_message=Max("created_at"))
+        .order_by("-last_message")[:20]
+    )
+    conversation_list = []
+    for sess in sessions:
+        sk = sess["session_key"]
+        if not sk:
+            continue
+        first_msg = ChatMessage.objects.filter(session_key=sk).order_by("created_at").values_list("user_message", flat=True).first()
+        title = (first_msg or "Yeni Sohbet")[:35]
+        conversation_list.append({"session_key": sk, "title": title, "active": sk == target_session})
+
+    db_messages = list(ChatMessage.objects.filter(session_key=target_session).values("user_message", "bot_response"))
+    return render(request, "chat/index.html", {"chat_messages": db_messages, "conversations": conversation_list, "current_session": target_session})
 
 
-# ---------------------------------------------------------------------------
-# View: Harici API — /api/chat/
-# ---------------------------------------------------------------------------
+def mascot_image(request, filename):
+    """Serve mascot PNG files to the chat UI."""
+    if not re.fullmatch(r"[1-9]\.png", filename):
+        raise Http404("Maskot bulunamadi.")
+
+    archive_dir = settings.BASE_DIR / "static" / "mascot"
+
+    image_path = archive_dir / filename
+    if not image_path.exists():
+        raise Http404("Maskot bulunamadi.")
+
+    return FileResponse(image_path.open("rb"), content_type="image/png")
+
 
 @csrf_exempt
 def chat_api(request):
-    """Harici API istemcileri için JSON tabanlı endpoint (hibrit filtreleme ile)."""
+    """JSON endpoint for external API clients."""
     if request.method != "POST":
         return JsonResponse({"error": "Sadece POST destekleniyor."}, status=405)
 
     try:
         data = json.loads(request.body)
-    except json.JSONDecodeError:
+    except (json.JSONDecodeError, UnicodeDecodeError):
         return JsonResponse({"error": "Geçersiz JSON formatı."}, status=400)
 
     user_text = data.get("message", "").strip()
-    if not user_text:
-        return JsonResponse({"error": "Mesaj boş olamaz."}, status=400)
+    validation_error = validate_user_message(user_text)
+    if validation_error:
+        return JsonResponse({"error": validation_error}, status=400)
 
-    # ── 1. DIRECT ANSWER KONTROLÜ (TEST İÇİN DEVRE DIŞI) ───────────────────
-    # direct = check_direct_answer(user_text)
-    # if direct:
-    #     return JsonResponse({"response": direct})
+    bot_response, _, sources = generate_chat_response(user_text)
+    return JsonResponse({"response": bot_response, "sources": sources})
 
-    # ── 2. RAG VE LLM ÇAĞRISI ───────────────────────────────────────────────
-    fresh_context, sources = build_context(user_text)
-    
-    if not fresh_context:
-        return JsonResponse({
-            "response": (
-                "Üzgünüm, aradığınız konu hakkında sistemimde güncel bir veri bulunmamaktadır."
-            )
-        })
 
-    # ── 3. PROMPT & LLM ──────────────────────────────────────────────────────
-    full_prompt = build_api_prompt(fresh_context, user_text)
-    print("\n=== [DEBUG] LLM PAYLOAD (API) ===")
-    print(f"Full Prompt:\n{full_prompt}")
-    print("=================================\n")
-    bot_response = generate_llm(full_prompt)
-    bot_response = clean_bot_response(bot_response)
+def health_check(request):
+    """Quick diagnostics for DB, ChromaDB and Ollama."""
+    db_content_count = UniversityContent.objects.count()
 
-    if sources:
-        source_note = "\n\n(Kaynak: " + ", ".join(sources) + ")"
-        print(f"[RAG API] Kullanılan Kaynaklar: {sources}")
-        bot_response += source_note
+    chroma_ok = True
+    chroma_count = 0
+    try:
+        chroma_count = get_chroma_collection().count()
+    except Exception as e:
+        chroma_ok = False
+        logger.exception("Health check ChromaDB failed: %s", e)
 
-    ChatMessage.objects.create(user_message=user_text, bot_response=bot_response)
-    return JsonResponse({"response": bot_response})
+    ollama_ok = True
+    ollama_models = []
+    try:
+        ollama_models = list_ollama_models()
+    except Exception as e:
+        ollama_ok = False
+        logger.exception("Health check Ollama failed: %s", e)
+
+    model_ready = OLLAMA_MODEL in ollama_models
+    sync_status = SyncStatus.objects.filter(key="default").first()
+    sync_ok = bool(sync_status and sync_status.last_success_at and not sync_status.last_error)
+    healthy = db_content_count > 0 and chroma_count > 0 and chroma_ok and ollama_ok and model_ready and sync_ok
+
+    return JsonResponse(
+        {
+            "status": "ok" if healthy else "degraded",
+            "database": {
+                "ok": True,
+                "university_content_count": db_content_count,
+            },
+            "chroma": {
+                "ok": chroma_ok,
+                "document_count": chroma_count,
+            },
+            "ollama": {
+                "ok": ollama_ok,
+                "model": OLLAMA_MODEL,
+                "model_ready": model_ready,
+                "models": ollama_models,
+            },
+            "sync": {
+                "ok": sync_ok,
+                "last_started_at": sync_status.last_started_at.isoformat() if sync_status and sync_status.last_started_at else None,
+                "last_success_at": sync_status.last_success_at.isoformat() if sync_status and sync_status.last_success_at else None,
+                "source_count": sync_status.source_count if sync_status else 0,
+                "chunk_count": sync_status.chunk_count if sync_status else 0,
+                "last_error": sync_status.last_error if sync_status else "Sync henüz çalıştırılmadı.",
+            },
+        },
+        status=200 if healthy else 503,
+    )
