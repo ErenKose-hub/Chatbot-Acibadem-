@@ -1,52 +1,64 @@
 {% load static %}
 <!DOCTYPE html>
 <html lang="tr">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>ACU Asistanı</title>
-    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎓</text></svg>">
+    <title>Acıbadem Dijital Danışman - Modern</title>
+    <link rel="icon"
+        href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎓</text></svg>">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+
     <style>
         :root {
+            /* Kurumsal ve Profesyonel Palet */
             --acu-blue: #003366;
             --acu-red: #a51c30;
-            --acu-red-hover: #821626;
-            --bg-gray: #f8f9fa;
-            --border-light: #dee2e6;
-            --text-dark: #212529;
-            --bot-bg: #f1f3f5;
-            --sidebar-bg: #f4f6f8;
-            --sidebar-active: #e3eaf3;
-            --sidebar-hover: #e9ecef;
-            --sidebar-width: 260px;
+            --bg-main: #f4f7f9;
+            --bg-sidebar: #ffffff;
+            --bg-chat: #ffffff;
+            --text-primary: #1f2937;
+            --text-secondary: #6b7280;
+            --border-color: #e5e7eb;
+            --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.05);
+            --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
+            --sidebar-width: 280px;
         }
 
-        * { box-sizing: border-box; }
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
 
         body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background-color: var(--bg-gray);
-            margin: 0;
+            font-family: 'Inter', -apple-system, sans-serif;
+            background-color: var(--bg-main);
+            color: var(--text-primary);
             display: flex;
             height: 100vh;
-            height: 100dvh;
             overflow: hidden;
+            -webkit-font-smoothing: antialiased;
         }
 
-        /* SIDEBAR */
+        /* YAN MENÜ */
         #sidebar {
             width: var(--sidebar-width);
-            background: var(--sidebar-bg);
-            border-right: 1px solid var(--border-light);
+            background: var(--bg-sidebar);
+            border-right: 1px solid var(--border-color);
             display: flex;
             flex-direction: column;
             flex-shrink: 0;
-            transition: transform 0.25s ease;
+            z-index: 50;
+            transition: transform 0.3s ease;
         }
 
         .sidebar-header {
-            padding: 16px;
-            border-bottom: 1px solid var(--border-light);
+            padding: 20px;
+            border-bottom: 1px solid var(--border-color);
         }
 
         .new-chat-btn-sidebar {
@@ -54,364 +66,483 @@
             align-items: center;
             justify-content: center;
             gap: 8px;
-            background: white;
-            border: 1px solid var(--border-light);
-            color: var(--text-dark);
-            padding: 10px 14px;
-            border-radius: 10px;
+            background: var(--acu-blue);
+            color: white;
+            padding: 12px;
+            border-radius: 8px;
             text-decoration: none;
-            font-weight: 600;
+            font-weight: 500;
             font-size: 14px;
-            transition: background 0.15s, border-color 0.15s;
-            width: 100%;
+            transition: background 0.2s;
         }
+
         .new-chat-btn-sidebar:hover {
-            background: var(--sidebar-hover);
-            border-color: #ced4da;
+            background: #002244;
         }
 
         .sidebar-list {
             flex: 1;
             overflow-y: auto;
-            padding: 8px;
+            padding: 12px;
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
         }
 
         .conversation-item {
-            display: block;
             padding: 10px 12px;
-            border-radius: 8px;
-            margin-bottom: 4px;
+            border-radius: 6px;
             text-decoration: none;
-            color: var(--text-dark);
+            color: var(--text-secondary);
             font-size: 14px;
             white-space: nowrap;
             overflow: hidden;
             text-overflow: ellipsis;
-            transition: background 0.15s;
-            cursor: pointer;
-            border: none;
-            background: none;
-            width: 100%;
-            text-align: left;
-        }
-        .conversation-item:hover {
-            background: var(--sidebar-hover);
-        }
-        .conversation-item.active {
-            background: var(--sidebar-active);
-            font-weight: 600;
+            transition: all 0.2s;
         }
 
-        /* MAIN CONTENT */
+        .conversation-item:hover {
+            background: #f3f4f6;
+            color: var(--text-primary);
+        }
+
+        .conversation-item.active {
+            background: #f0f4f8;
+            color: var(--acu-blue);
+            font-weight: 500;
+            border-left: 3px solid var(--acu-blue);
+        }
+
+        /* ANA EKRAN & HEADER */
         #main {
             flex: 1;
             display: flex;
             flex-direction: column;
-            min-width: 0;
+            background: var(--bg-main);
+            position: relative;
         }
 
         .header {
-            background: var(--acu-blue);
-            color: white;
-            padding: 14px 20px;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.2);
-            flex-shrink: 0;
+            background: var(--bg-chat);
+            padding: 16px 24px;
             display: flex;
             align-items: center;
-            gap: 12px;
+            border-bottom: 1px solid var(--border-color);
+            box-shadow: var(--shadow-sm);
+            z-index: 10;
         }
-        .header h2 { margin: 0; font-size: 1.2rem; flex: 1; text-align: center; }
+
+        .header h2 {
+            font-size: 1.1rem;
+            font-weight: 600;
+            color: var(--text-primary);
+            margin-left: 12px;
+        }
+
+        .header-logo {
+            width: 32px;
+            height: 32px;
+            background: var(--acu-blue);
+            color: white;
+            border-radius: 6px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 12px;
+            font-weight: bold;
+        }
 
         .hamburger {
             display: none;
             background: none;
             border: none;
-            color: white;
-            font-size: 22px;
+            color: var(--text-primary);
             cursor: pointer;
-            padding: 4px 8px;
-            border-radius: 6px;
+            padding: 4px;
         }
-        .hamburger:hover { background: rgba(255,255,255,0.1); }
 
+        /* SOHBET ALANI */
         #chat-container {
-            max-width: 800px;
-            width: 95%;
-            margin: 12px auto;
-            background: white;
             flex: 1;
             display: flex;
             flex-direction: column;
-            border-radius: 15px;
-            box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+            max-width: 900px;
+            width: 100%;
+            margin: 0 auto;
             overflow: hidden;
-            min-height: 0;
         }
 
         #chat-box {
             flex: 1;
             overflow-y: auto;
-            padding: 20px;
+            padding: 30px 24px 200px 24px;
             display: flex;
             flex-direction: column;
-            gap: 12px;
+            gap: 20px;
             background-color: #ffffff;
-            min-height: 0;
+            background-image: radial-gradient(#d1d5db 1px, transparent 1px);
+            background-size: 24px 24px;
+        }
+
+        /* MESAJLAR */
+        .message-wrapper {
+            animation: fadeIn 0.3s ease forwards;
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(5px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
         }
 
         .message {
-            max-width: 82%;
-            padding: 12px 18px;
-            border-radius: 20px;
-            line-height: 1.6;
-            font-size: 15px;
+            max-width: 85%;
+            padding: 14px 18px;
+            line-height: 1.5;
+            font-size: 14px;
             word-wrap: break-word;
-            overflow-wrap: break-word;
-            white-space: pre-wrap;
         }
 
         .user-message {
             align-self: flex-end;
             background: var(--acu-blue);
             color: white;
-            border-bottom-right-radius: 4px;
+            border-radius: 12px 12px 0 12px;
+            margin-left: auto;
+            box-shadow: var(--shadow-sm);
         }
 
         .bot-message {
             align-self: flex-start;
-            background: var(--bot-bg);
-            color: var(--text-dark);
-            border-bottom-left-radius: 4px;
-            border: 1px solid var(--border-light);
-        }
-
-        .bot-row {
-            align-self: flex-start;
-            display: flex;
-            align-items: flex-end;
-            gap: 10px;
-            max-width: 88%;
-        }
-
-        .bot-row .bot-message {
-            max-width: none;
-        }
-
-        .bot-avatar {
-            width: 54px;
-            height: 54px;
-            border-radius: 50%;
-            background: #ffffff;
-            border: 2px solid #e9ecef;
-            box-shadow: 0 5px 14px rgba(0, 0, 0, 0.12);
-            object-fit: cover;
-            flex: 0 0 auto;
-            transition: transform 0.15s ease, border-color 0.15s ease;
-        }
-
-        .bot-row.speaking .bot-avatar {
-            border-color: var(--acu-red);
-            transform: translateY(-2px) scale(1.04);
+            background: white;
+            color: var(--text-primary);
+            border-radius: 0 12px 12px 12px;
+            border: 1px solid var(--border-color);
+            box-shadow: var(--shadow-sm);
         }
 
         .bot-message.error-message {
-            background: #fff5f5;
-            border-color: #ffc9c9;
-            color: #c92a2a;
+            background: #fef2f2;
+            color: var(--acu-red);
+            border-color: #fecaca;
         }
 
-        .message-sources {
-            margin-top: 8px;
+        .bot-row {
+            display: flex;
+            align-items: flex-end;
+            gap: 12px;
+            max-width: 90%;
+        }
+
+        .bot-avatar {
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            border: 1px solid var(--border-color);
+            object-fit: cover;
+            background: white;
+        }
+
+        .message-info {
+            display: block;
+            font-size: 11px;
+            margin-top: 6px;
+            opacity: 0.7;
+        }
+
+        .user-message .message-info {
+            text-align: right;
+        }
+
+        /* 1. GERİ BİLDİRİM (FEEDBACK) CSS */
+        .message-actions {
+            display: flex;
+            gap: 10px;
+            margin-top: 10px;
             padding-top: 8px;
-            border-top: 1px solid #e9ecef;
-            font-size: 12px;
-            color: #868e96;
+            border-top: 1px solid rgba(0, 0, 0, 0.05);
+            opacity: 0.8;
+        }
+
+        .action-btn {
+            background: none;
+            border: none;
+            color: var(--text-secondary);
+            cursor: pointer;
+            font-size: 14px;
+            padding: 2px 5px;
+            transition: color 0.2s, opacity 0.2s;
+        }
+
+        .action-btn:hover {
+            color: var(--text-primary);
+            opacity: 1;
+        }
+
+        .action-btn.active {
+            color: var(--acu-blue);
+            opacity: 1;
+        }
+
+        /* 3. HIZLI SORU (QUICK PROMPT) CSS */
+        .controls-container {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background: linear-gradient(transparent, var(--bg-main) 30%);
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            z-index: 15;
+        }
+
+
+
+        /* INPUT ALANI */
+        .input-area {
+            display: flex;
+            width: 100%;
+            max-width: 800px;
+            background: white;
+            padding: 8px 12px;
+            border-radius: 12px;
+            border: 1px solid var(--border-color);
+            box-shadow: var(--shadow-md);
+            transition: border-color 0.2s;
+        }
+
+        .input-area:focus-within {
+            border-color: var(--acu-blue);
+        }
+
+        .input-area input {
+            flex: 1;
+            padding: 10px;
+            border: none;
+            outline: none;
+            font-size: 14px;
+            color: var(--text-primary);
+            font-family: inherit;
+        }
+
+        .input-area button {
+            background: var(--acu-blue);
+            color: white;
+            border: none;
+            width: 40px;
+            height: 40px;
+            border-radius: 8px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: background 0.2s;
+        }
+
+        .input-area button:hover:not(:disabled) {
+            background: #002244;
+        }
+
+        .input-area button:disabled {
+            background: #d1d5db;
+            cursor: not-allowed;
+        }
+
+        .input-area button svg {
+            width: 18px;
+            height: 18px;
+            fill: currentColor;
+        }
+
+        /* KAYNAKLAR */
+        .message-sources {
+            margin-top: 12px;
+            padding-top: 10px;
+            border-top: 1px solid #f3f4f6;
             display: flex;
             flex-wrap: wrap;
             gap: 6px;
             align-items: center;
         }
+
         .message-sources::before {
             content: "Kaynak:";
-            font-weight: 600;
-            color: #adb5bd;
-        }
-        .source-tag {
-            background: #e9ecef;
-            color: #495057;
-            padding: 2px 8px;
-            border-radius: 10px;
             font-size: 11px;
+            font-weight: 600;
+            color: var(--text-secondary);
         }
 
+        .source-tag {
+            background: #f3f4f6;
+            color: var(--text-secondary);
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 11px;
+            font-weight: 500;
+            border: 1px solid var(--border-color);
+        }
+
+        /* TYPING */
         .typing-indicator {
             display: inline-flex;
-            align-items: center;
             gap: 4px;
             padding: 4px 0;
         }
+
         .typing-indicator span {
-            width: 7px;
-            height: 7px;
-            background: #adb5bd;
+            width: 6px;
+            height: 6px;
+            background: #9ca3af;
             border-radius: 50%;
             animation: blink 1.4s infinite both;
         }
-        .typing-indicator span:nth-child(2) { animation-delay: 0.2s; }
-        .typing-indicator span:nth-child(3) { animation-delay: 0.4s; }
 
-        .type-cursor::after {
-            content: "";
-            display: inline-block;
-            width: 2px;
-            height: 1em;
-            margin-left: 2px;
-            background: #868e96;
-            vertical-align: -0.15em;
-            animation: cursorBlink 0.8s infinite;
+        .typing-indicator span:nth-child(2) {
+            animation-delay: 0.2s;
+        }
+
+        .typing-indicator span:nth-child(3) {
+            animation-delay: 0.4s;
         }
 
         @keyframes blink {
-            0%, 80%, 100% { opacity: 0.3; }
-            40% { opacity: 1; }
+
+            0%,
+            80%,
+            100% {
+                opacity: 0.3;
+            }
+
+            40% {
+                opacity: 1;
+            }
         }
 
-        @keyframes cursorBlink {
-            0%, 45% { opacity: 1; }
-            46%, 100% { opacity: 0; }
-        }
-
-        .input-area {
-            display: flex;
-            padding: 16px 20px;
-            border-top: 1px solid #eee;
-            background: #fff;
-            flex-shrink: 0;
-        }
-        .input-area input {
-            flex: 1;
-            padding: 12px 20px;
-            border: 2px solid #e9ecef;
-            border-radius: 30px;
-            outline: none;
-            transition: border-color 0.2s, background-color 0.2s;
-            font-size: 15px;
-        }
-        .input-area input:focus { border-color: var(--acu-blue); }
-        .input-area input:disabled {
-            background-color: #f1f3f5;
-            color: #868e96;
-            cursor: not-allowed;
-        }
-        .input-area button {
-            background: var(--acu-red);
-            color: white;
-            border: none;
-            padding: 0 25px;
-            margin-left: 12px;
-            border-radius: 30px;
-            cursor: pointer;
-            transition: background 0.3s, transform 0.1s;
-            font-weight: bold;
-            font-size: 15px;
-            white-space: nowrap;
-        }
-        .input-area button:hover:not(:disabled) { background: var(--acu-red-hover); transform: translateY(-1px); }
-        .input-area button:active:not(:disabled) { transform: translateY(0); }
-        .input-area button:disabled {
-            background: #ccc;
-            cursor: not-allowed;
-            transform: none;
-        }
-
-        /* MOBILE */
+        /* MOBİL */
         @media (max-width: 768px) {
             #sidebar {
                 position: fixed;
-                top: 0; left: 0; bottom: 0;
-                z-index: 100;
+                top: 0;
+                left: 0;
+                bottom: 0;
                 transform: translateX(-100%);
-                box-shadow: 2px 0 10px rgba(0,0,0,0.15);
             }
-            #sidebar.open { transform: translateX(0); }
-            .hamburger { display: block; }
-            .header { padding: 12px 14px; }
-            .header h2 { font-size: 1rem; text-align: center; }
-            #chat-container { width: 100%; margin: 0; border-radius: 0; height: 1px; flex: 1; }
-            #chat-box { padding: 12px; gap: 10px; }
-            .message { max-width: 90%; font-size: 14px; padding: 10px 14px; }
-            .bot-row { max-width: 96%; gap: 8px; }
-            .bot-avatar { width: 42px; height: 42px; }
-            .input-area {
-                padding: 12px 10px;
-                gap: 8px;
+
+            #sidebar.open {
+                transform: translateX(0);
             }
-            .input-area input {
-                padding: 10px 14px;
-                font-size: 16px;
+
+            .hamburger {
+                display: block;
             }
-            .input-area button {
-                padding: 10px 18px;
-                margin-left: 0;
-                font-size: 14px;
+
+            #chat-box {
+                padding: 20px 16px 150px 16px;
             }
+
+            .message {
+                max-width: 90%;
+            }
+
+            .controls-container {
+                padding: 12px;
+            }
+
+
+        }
+
+        .sidebar-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.4);
+            z-index: 40;
+        }
+
+        .sidebar-overlay.open {
+            display: block;
         }
     </style>
 </head>
+
 <body>
 
-    <!-- SIDEBAR -->
+    <div class="sidebar-overlay" id="sidebar-overlay"></div>
+
     <nav id="sidebar">
         <div class="sidebar-header">
-            <a href="?new_chat=1" class="new-chat-btn-sidebar">+ Yeni Sohbet</a>
+            <a href="?new_chat=1" class="new-chat-btn-sidebar">Yeni Sohbet Başlat</a>
         </div>
         <div class="sidebar-list">
             {% for conv in conversations %}
-            <a href="?session={{ conv.session_key }}" class="conversation-item {% if conv.active %}active{% endif %}">
-                {{ conv.title }}
-            </a>
+            <a href="?session={{ conv.session_key }}" class="conversation-item {% if conv.active %}active{% endif %}">{{ conv.title }}</a>
             {% empty %}
-            <div style="padding: 12px; color: #868e96; font-size: 13px; text-align: center;">
-                Henüz sohbet yok.
-            </div>
+            <div style="padding: 20px; color: var(--text-secondary); font-size: 13px; text-align: center;">Geçmiş sohbet bulunmuyor.</div>
             {% endfor %}
         </div>
     </nav>
 
-    <!-- MAIN -->
     <div id="main">
         <div class="header">
-            <button class="hamburger" id="hamburger" aria-label="Menü">☰</button>
-            <h2>🎓 Acıbadem Üniversitesi Asistanı</h2>
+            <button class="hamburger" id="hamburger">☰</button>
+            <div class="header-logo">ACU</div>
+            <h2>Dijital Akademik Danışman</h2>
         </div>
 
         <div id="chat-container">
             <div id="chat-box">
                 {% if not chat_messages %}
-                <div class="bot-row">
-                    <img class="bot-avatar" src="/mascot/1.png" alt="" aria-hidden="true">
+                <div class="bot-row message-wrapper">
+                    <img class="bot-avatar" src="/mascot/1.png" alt="Danışman">
                     <div class="message bot-message">
-                        <div class="message-text">Merhaba! Ben Acıbadem Üniversitesi Akademik Asistanıyım. Size üniversitemiz, programlar veya kontenjanlar hakkında bilgi verebilirim. Ne öğrenmek istersiniz?</div>
+                        <div class="message-text">Hoş geldiniz. Ben Acıbadem Üniversitesi Dijital Danışmanıyım. Akademik
+                            takvim, bölümler, kampüs olanakları veya idari süreçler hakkında size nasıl yardımcı
+                            olabilirim?</div>
+                        <span class="message-info">Dijital Danışman</span>
                     </div>
                 </div>
                 {% else %}
-                    {% for msg in chat_messages %}
-                    <div class="message user-message">{{ msg.user_message }}</div>
-                    <div class="bot-row">
-                        <img class="bot-avatar" src="/mascot/1.png" alt="" aria-hidden="true">
-                        <div class="message bot-message">
-                            <div class="message-text">{{ msg.bot_response }}</div>
-                        </div>
+                {% for msg in chat_messages %}
+                <div class="message user-message message-wrapper">
+                    {{ msg.user_message }}
+                    <span class="message-info">Siz</span>
+                </div>
+                <div class="bot-row message-wrapper">
+                    <img class="bot-avatar" src="/mascot/1.png" alt="Danışman">
+                    <div class="message bot-message">
+                        <div class="message-text">{{ msg.bot_response }}</div>
+                        <span class="message-info">Dijital Danışman</span>
                     </div>
-                    {% endfor %}
+                </div>
+                {% endfor %}
                 {% endif %}
             </div>
 
-            <form id="chat-form" class="input-area">
-                {% csrf_token %}
-                <input type="text" id="user-input" name="message" placeholder="Mesajınızı yazın..." autocomplete="off" maxlength="1000">
-                <button type="submit" id="send-btn">Gönder</button>
-            </form>
+            <!-- KONTROLLER VE INPUT KONTEYNERI -->
+            <div class="controls-container">
+
+                <form id="chat-form" class="input-area">
+                    {% csrf_token %}
+                    <input type="text" id="user-input" name="message" placeholder="Sorunuzu buraya yazınız..."
+                        autocomplete="off" maxlength="1000">
+                    <button type="submit" id="send-btn" aria-label="Gönder">
+                        <svg viewBox="0 0 24 24">
+                            <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"></path>
+                        </svg>
+                    </button>
+                </form>
+            </div>
         </div>
     </div>
 
@@ -422,212 +553,130 @@
         const sendBtn = document.getElementById('send-btn');
         const hamburger = document.getElementById('hamburger');
         const sidebar = document.getElementById('sidebar');
+        const overlay = document.getElementById('sidebar-overlay');
         const mascotFrames = Array.from({ length: 9 }, (_, index) => `/mascot/${index + 1}.png`);
-        const maxMessageLength = 1000;
+
         let isSending = false;
         let mascotFrameIndex = 0;
 
-        hamburger.addEventListener('click', () => {
-            sidebar.classList.toggle('open');
-        });
+        hamburger.addEventListener('click', () => { sidebar.classList.toggle('open'); overlay.classList.toggle('open'); });
+        overlay.addEventListener('click', () => { sidebar.classList.remove('open'); overlay.classList.remove('open'); });
 
-        // Close sidebar when clicking outside on mobile
-        document.addEventListener('click', (e) => {
-            if (window.innerWidth <= 768 && sidebar.classList.contains('open')) {
-                if (!sidebar.contains(e.target) && !hamburger.contains(e.target)) {
-                    sidebar.classList.remove('open');
-                }
-            }
-        });
+        function scrollToBottom() { chatBox.scrollTop = chatBox.scrollHeight; }
 
-        function setInputDisabled(disabled) {
-            userInput.disabled = disabled;
-            sendBtn.disabled = disabled;
+        // 1. GERİ BİLDİRİM (FEEDBACK) JS
+        function handleFeedback(btn) {
+            const messageWrapper = btn.closest('.message-wrapper');
+            const actions = messageWrapper.querySelector('.message-actions');
+            const buttons = actions.querySelectorAll('.action-btn');
+
+            buttons.forEach(b => b.classList.remove('active')); // Diğerlerini sıfırla
+            btn.classList.add('active'); // Mevcut olanı aktif et
+
+            const type = btn.getAttribute('data-type');
+            // Burada geri bildirimi backende gönderebilirsiniz, örneğin fetch kullanarak
+            // console.log(`Geri bildirim alındı: ${type}`);
+
+            // Kullanıcıya teşekkür notu simülasyonu
+            const currentText = btn.textContent;
+            btn.innerHTML = `${type === 'up' ? '👍' : '👎'} Teşekkürler!`;
+            setTimeout(() => {
+                btn.innerHTML = currentText;
+            }, 1500);
         }
 
-        function scrollToBottom() {
-            chatBox.scrollTop = chatBox.scrollHeight;
-        }
+
 
         function createBotMessage(content, { isError, sources } = {}) {
             const row = document.createElement('div');
-            row.className = 'bot-row';
+            row.className = 'bot-row message-wrapper';
 
-            const avatar = document.createElement('img');
-            avatar.className = 'bot-avatar';
-            avatar.src = mascotFrames[0];
-            avatar.alt = '';
-            avatar.setAttribute('aria-hidden', 'true');
-            row.appendChild(avatar);
+            row.innerHTML = `
+                <img class="bot-avatar" src="${mascotFrames[0]}" alt="Danışman">
+                <div class="message bot-message ${isError ? 'error-message' : ''}">
+                    <div class="message-text">${content}</div>
+                    <span class="message-info">Dijital Danışman</span>
+                </div>
+            `;
 
-            const div = document.createElement('div');
-            div.className = 'message bot-message' + (isError ? ' error-message' : '');
+            const bubble = row.querySelector('.bot-message');
 
-            const textNode = document.createElement('div');
-            textNode.className = 'message-text';
-            textNode.textContent = content;
-            div.appendChild(textNode);
-            row.appendChild(div);
+            if (!isError && content && !content.includes('typing-indicator')) {
+                // 1. GERİ BİLDİRİM EYLEMLERİ HTML (Hata değilse ekle)
+                const actionsDiv = document.createElement('div');
+                actionsDiv.className = 'message-actions';
+                actionsDiv.innerHTML = `
+                    <button class="action-btn" data-type="up" onclick="handleFeedback(this)">👍 Yararlı</button>
+                    <button class="action-btn" data-type="down" onclick="handleFeedback(this)">👎 Yararsız</button>
+                `;
+                bubble.appendChild(actionsDiv); // Mesaj balonuna ekle
+            }
 
             if (sources && sources.length > 0) {
-                appendSources(row, sources);
+                const srcDiv = document.createElement('div');
+                srcDiv.className = 'message-sources';
+                sources.forEach(src => {
+                    const tag = document.createElement('span');
+                    tag.className = 'source-tag';
+                    tag.textContent = src;
+                    srcDiv.appendChild(tag);
+                });
+                bubble.appendChild(srcDiv);
             }
-
             return row;
-        }
-
-        function appendSources(messageDiv, sources) {
-            if (!sources || sources.length === 0) return;
-
-            const bubble = messageDiv.querySelector('.bot-message') || messageDiv;
-
-            const srcDiv = document.createElement('div');
-            srcDiv.className = 'message-sources';
-            sources.forEach(src => {
-                const tag = document.createElement('span');
-                tag.className = 'source-tag';
-                tag.textContent = src;
-                srcDiv.appendChild(tag);
-            });
-            bubble.appendChild(srcDiv);
-        }
-
-        function startMascotSpeaking(messageDiv) {
-            const avatar = messageDiv.querySelector('.bot-avatar');
-            if (!avatar) return;
-
-            stopMascotSpeaking(messageDiv);
-            messageDiv.classList.add('speaking');
-            avatar.src = mascotFrames[mascotFrameIndex % mascotFrames.length];
-            messageDiv.mascotTimer = setInterval(() => {
-                mascotFrameIndex += 1;
-                avatar.src = mascotFrames[mascotFrameIndex % mascotFrames.length];
-            }, 130);
-        }
-
-        function stopMascotSpeaking(messageDiv) {
-            const avatar = messageDiv.querySelector('.bot-avatar');
-            if (messageDiv.mascotTimer) {
-                clearInterval(messageDiv.mascotTimer);
-                messageDiv.mascotTimer = null;
-            }
-            messageDiv.classList.remove('speaking');
-            if (avatar) avatar.src = mascotFrames[0];
-        }
-
-        function sleep(ms) {
-            return new Promise(resolve => setTimeout(resolve, ms));
         }
 
         async function typeBotMessage(messageDiv, text, sources) {
             const textNode = messageDiv.querySelector('.message-text');
             textNode.textContent = '';
-            textNode.classList.add('type-cursor');
-            startMascotSpeaking(messageDiv);
 
             for (let i = 0; i < text.length; i++) {
                 textNode.textContent += text[i];
                 scrollToBottom();
-
-                const char = text[i];
-                if (char === '\n') {
-                    await sleep(35);
-                } else if ('.!?'.includes(char)) {
-                    await sleep(55);
-                } else if (',;:'.includes(char)) {
-                    await sleep(25);
-                } else {
-                    await sleep(7);
-                }
+                await new Promise(r => setTimeout(r, 10)); // Sabit hızlı yazma efekti
             }
-
-            textNode.classList.remove('type-cursor');
-            stopMascotSpeaking(messageDiv);
-            appendSources(messageDiv, sources);
-            scrollToBottom();
         }
 
         chatForm.onsubmit = async (e) => {
             e.preventDefault();
-            if (isSending) return;
+            if (isSending || !userInput.value.trim()) return;
+
             const message = userInput.value.trim();
-            if (!message) return;
-            if (message.length > maxMessageLength) {
-                const errDiv = createBotMessage(
-                    `Mesaj en fazla ${maxMessageLength} karakter olabilir.`,
-                    { isError: true }
-                );
-                chatBox.appendChild(errDiv);
-                scrollToBottom();
-                return;
-            }
-
             isSending = true;
-            setInputDisabled(true);
+            userInput.disabled = true; sendBtn.disabled = true;
 
-            const userMessageDiv = document.createElement('div');
-            userMessageDiv.className = 'message user-message';
-            userMessageDiv.textContent = message;
-            chatBox.appendChild(userMessageDiv);
+            chatBox.innerHTML += `<div class="message user-message message-wrapper">${message}<span class="message-info">Siz</span></div>`;
             userInput.value = '';
             scrollToBottom();
 
-            const loadingDiv = createBotMessage('', { sources: [] });
-            loadingDiv.querySelector('.message-text').innerHTML = '<div class="typing-indicator"><span></span><span></span><span></span></div>';
+            const loadingDiv = createBotMessage('<div class="typing-indicator"><span></span><span></span><span></span></div>');
             chatBox.appendChild(loadingDiv);
-            startMascotSpeaking(loadingDiv);
             scrollToBottom();
 
             try {
                 const response = await fetch('', {
                     method: 'POST',
-                    headers: {
-                        'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value,
-                        'Content-Type': 'application/x-www-form-urlencoded'
-                    },
+                    headers: { 'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value, 'Content-Type': 'application/x-www-form-urlencoded' },
                     body: 'message=' + encodeURIComponent(message)
                 });
-
                 const data = await response.json();
 
-                if (!response.ok) {
-                    throw new Error(data.error || 'Sunucu hatası: ' + response.status);
-                }
-
-                let botText = data.response || '';
-                let sources = data.sources || [];
-
-                stopMascotSpeaking(loadingDiv);
                 chatBox.removeChild(loadingDiv);
 
-                if (!botText.trim()) {
-                    const emptyDiv = createBotMessage(
-                        'Şu an bir yanıt oluşturamadım. Lütfen sorunuzu farklı bir şekilde sorunuz.',
-                        { isError: true }
-                    );
-                    chatBox.appendChild(emptyDiv);
-                } else {
-                    const botDiv = createBotMessage('', { sources: [] });
+                if (data.response) {
+                    const botDiv = createBotMessage('', { sources: data.sources });
                     chatBox.appendChild(botDiv);
-                    await typeBotMessage(botDiv, botText, sources);
+                    await typeBotMessage(botDiv, data.response, data.sources);
                 }
             } catch (error) {
-                if (chatBox.contains(loadingDiv)) {
-                    stopMascotSpeaking(loadingDiv);
-                    chatBox.removeChild(loadingDiv);
-                }
-                const errDiv = createBotMessage(
-                    error.message || 'Bağlantı hatası oluştu. Lütfen biraz sonra tekrar deneyin.',
-                    { isError: true }
-                );
-                chatBox.appendChild(errDiv);
+                chatBox.removeChild(loadingDiv);
+                chatBox.appendChild(createBotMessage('Sistemsel bir hata oluştu.', { isError: true }));
             } finally {
-                isSending = false;
-                setInputDisabled(false);
-                userInput.focus();
-                scrollToBottom();
+                isSending = false; userInput.disabled = false; sendBtn.disabled = false;
+                userInput.focus(); scrollToBottom();
             }
         };
     </script>
 </body>
+
 </html>

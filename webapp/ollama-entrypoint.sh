@@ -14,12 +14,12 @@ for i in $(seq 1 30); do
     sleep 1
 done
 
-echo "[Ollama Init] Checking model: qwen2.5:3b"
-if ollama list | grep -q "qwen2.5:3b"; then
+echo "[Ollama Init] Checking model: llama3.1:8b"
+if ollama list | grep -q "llama3.1:8b"; then
     echo "[Ollama Init] Model already exists."
 else
-    echo "[Ollama Init] Pulling model: qwen2.5:3b"
-    ollama pull qwen2.5:3b || echo "[Ollama Init] WARNING: Model pull failed, container will continue running."
+    echo "[Ollama Init] Pulling model: llama3.1:8b"
+    ollama pull llama3.1:8b || echo "[Ollama Init] WARNING: Model pull failed, container will continue running."
 fi
 
 echo "[Ollama Init] Setup complete. Waiting for server process..."

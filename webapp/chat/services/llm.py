@@ -7,7 +7,7 @@ import requests
 # Docker içinden Mac host'undaki (lokal) Ollama'ya erişmek için 'host.docker.internal' kullanılır.
 # Eğer Docker dışında çalıştırıyorsan 'http://localhost:11434' yapabilirsin.
 OLLAMA_BASE_URL = os.environ.get("OLLAMA_BASE_URL", "http://host.docker.internal:11434")
-OLLAMA_MODEL = os.environ.get("OLLAMA_MODEL", "qwen:7b")
+OLLAMA_MODEL = os.environ.get("OLLAMA_MODEL", "llama3.1:8b")
 logger = logging.getLogger(__name__)
 
 

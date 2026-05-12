@@ -267,44 +267,6 @@ def extract_main_content(soup):
     return None
 
 
-def sync_manual_data():
-    """scraper/manual_data klasörü altındaki .txt dosyalarını okur ve hem DB'ye hem ChromaDB'ye kaydeder."""
-    manual_dir = "/app/scraper/manual_data"
-    if not os.path.exists(manual_dir):
-        print(f"\n[MANUEL VERİ] Klasör bulunamadı: {manual_dir}")
-        return 0, 0
-
-    files = [f for f in os.listdir(manual_dir) if f.endswith(".txt")]
-    if not files:
-        print(f"\n[MANUEL VERİ] İşlenecek .txt dosyası bulunamadı.")
-        return 0, 0
-
-    print(f"\n[MANUEL VERİ] {len(files)} dosya işleniyor...")
-    count = 0
-    chunk_count = 0
-    for filename in files:
-        filepath = os.path.join(manual_dir, filename)
-        try:
-            with open(filepath, 'r', encoding='utf-8') as f:
-                content = f.read().strip()
-            
-            if len(content) < 10:
-                print(f"  ✗ {filename} (Çok kısa içerik, atlandı)")
-                continue
-
-            source_name = f"Manuel: {filename}"
-            UniversityContent.objects.update_or_create(
-                source_name=source_name,
-                defaults={"raw_text": content}
-            )
-            chunk_count += upsert_content(source_name, content)
-            count += 1
-            print(f"  ✓ {filename} ({len(content)} karakter)")
-        except Exception as e:
-            print(f"  ✗ {filename} (Hata: {e})")
-    
-    return count, chunk_count
-
 
 def get_content_and_links(url):
     """Sayfa içeriğini çeker, temizler ve içindeki alakalı linkleri bulur."""
@@ -449,11 +411,6 @@ def sync_deep():
         else:
             print(f"    ✗ Yetersiz içerik, atlandı.")
 
-    # --- 3. Manuel Verileri İşle ---
-    manual_count, manual_chunks = sync_manual_data()
-    total_saved += manual_count
-    total_chunks += manual_chunks
-
     # --- 4. OBS / Bologna İçeriklerini İşle ---
     obs_count, obs_chunks = sync_obs_data()
     total_saved += obs_count
@@ -462,7 +419,7 @@ def sync_deep():
     print(f"\n{'=' * 60}")
     print(f"  Tamamlandı. Toplam {total_saved} kayıt güncellendi/eklendi.")
     print(f"  Toplam {total_chunks} Chroma chunk üretildi/güncellendi.")
-    print(f"  (Web: {total_saved - manual_count - obs_count}, Manuel: {manual_count}, OBS: {obs_count})")
+    print(f"  (Web: {total_saved - obs_count}, OBS: {obs_count})")
     print(f"{'=' * 60}")
 
     status.last_success_at = timezone.now()
@@ -474,9 +431,8 @@ def sync_deep():
     return {
         "source_count": total_saved,
         "chunk_count": total_chunks,
-        "manual_count": manual_count,
         "obs_count": obs_count,
-        "web_count": total_saved - manual_count - obs_count,
+        "web_count": total_saved - obs_count,
     }
 
 

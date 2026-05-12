@@ -76,8 +76,6 @@ def generate_chat_response(user_text: str, history: list | None = None, session_
 
     # direct_response = direct_answer_from_context(user_text, fresh_context)
     # if direct_response:
-    #     manual_sources = [source for source in sources if source.startswith("Manuel:") and not is_test_source(source)]
-    #     sources = manual_sources or sources
     #     persist_chat_message(user_text, direct_response, history, session_key=session_key)
     #     return direct_response, history, sources
 

@@ -15,7 +15,7 @@ services:
 
   llm-service:
     image: ollama/ollama:latest
-    container_name: acu-llm
+    container_name: acu-llmm
     volumes:
       - ollama_data:/root/.ollama
       - ./webapp/ollama-entrypoint.sh:/ollama-entrypoint.sh:ro

@@ -105,8 +105,6 @@ def rerank_docs(results: list[dict], user_text: str) -> list[dict]:
             score += 20  # En yüksek öncelik
         elif source.startswith("Ana:") or source.startswith("Alt:"):
             score += 3
-        elif source.startswith("Manuel:"):
-            score += 4
         elif source.startswith("OBS:"):
             score += 0  # OBS'ye ekstra puan yok
             

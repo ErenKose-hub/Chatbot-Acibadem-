@@ -7,7 +7,7 @@ from chat.models import ChatMessage
 from chat.services.rag import build_context, direct_answer_from_context
 from chat.services.text_cleaning import clean_bot_response, extract_relevant_chunks, normalize_text
 from chat.views import MESSAGE_TOO_LONG_ERROR, chat_home, generate_chat_response, validate_user_message
-from scraper.sync_data import build_obs_section_urls, discover_obs_program_urls, sync_manual_data
+from scraper.sync_data import build_obs_section_urls, discover_obs_program_urls
 
 
 class TextHelperTests(SimpleTestCase):
@@ -156,10 +156,6 @@ class ChatPersistenceTests(TestCase):
 
 
 class SyncDataTests(SimpleTestCase):
-    @patch("scraper.sync_data.os.path.exists", return_value=False)
-    def test_sync_manual_data_handles_missing_directory(self, _mock_exists):
-        self.assertEqual(sync_manual_data(), (0, 0))
-
     def test_build_obs_section_urls_returns_about_and_courses_pages(self):
         urls = build_obs_section_urls(
             "https://obs.acibadem.edu.tr/oibs/bologna/index.aspx?lang=tr&curOp=showPac&curUnit=14&curSunit=6246"
